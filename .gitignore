@@ -1,0 +1,55 @@
+# ---- dependencies ----
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+
+# ---- build output (project is no-build; these are safety nets) ----
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ---- runtime state & logs ----
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+.pids
+*.pid
+*.seed
+
+# ---- secrets & local env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+/auth.json
+.dsh/local/
+
+# ---- local scratch / big dumps ----
+# work/ holds local tooling dumps and opencode-config.json, which contains
+# live third-party API credentials. Never commit it.
+work/
+tmp/
+temp/
+*.tmp
+
+# ---- coverage & test artifacts ----
+coverage/
+.nyc_output/
+*.lcov
+junit.xml
+
+# ---- editor / OS cruft ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ---- orchestration tool state (not project source) ----
+.expert-taskboards/
+.t3/

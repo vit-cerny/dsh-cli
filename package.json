@@ -1,0 +1,33 @@
+{
+  "name": "dsh-cli",
+  "version": "0.0.1",
+  "description": "DeepSeek Harness terminal client: zero-build, zero-runtime-dependency ESM CLI",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "bin": {
+    "dsh-cli": "./src/main.js"
+  },
+  "main": "./src/main.js",
+  "exports": {
+    ".": "./src/main.js"
+  },
+  "files": [
+    "src/"
+  ],
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test",
+    "lint": "node --check src/main.js"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "cli",
+    "tui",
+    "esm"
+  ]
+}
