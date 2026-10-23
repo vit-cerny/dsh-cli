@@ -1,0 +1,65 @@
+{
+  "name": "dsh-import-models",
+  "version": "0.1.0",
+  "description": "Import the models, providers, API keys and OAuth logins that other agent harnesses keep on this machine (opencode, Codex/ChatGPT, Claude Code, Gemini, Qwen, .env) into DeepSeek Harness, and manage them from a clean Settings page.",
+  "type": "module",
+  "private": false,
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/sources.js",
+    "lib/manager.js",
+    "lib/store.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vit-cerny/dsh-model-manager.git"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "opencode",
+    "codex",
+    "oauth",
+    "llm-providers",
+    "models"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/smoke.mjs"
+  },
+  "homepage": "https://github.com/vit-cerny/dsh-model-manager#readme",
+  "bugs": {
+    "url": "https://github.com/vit-cerny/dsh-model-manager/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

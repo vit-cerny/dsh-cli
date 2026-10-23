@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "模型导入 · 外部模型与凭据",
+    "description": "把其他 agent 工具（opencode、Codex/ChatGPT、Claude Code、Gemini、Qwen）里的模型、提供方、API Key 与 OAuth 登录导入并在 DSH 里统一管理。"
+  }
+}

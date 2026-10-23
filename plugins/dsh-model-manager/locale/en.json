@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Model Manager · foreign models & credentials",
+    "description": "Import and manage the models, providers, API keys and OAuth logins that other agent harnesses keep on this machine (opencode, Codex/ChatGPT, Claude Code, Gemini, Qwen) from inside DeepSeek Harness."
+  }
+}

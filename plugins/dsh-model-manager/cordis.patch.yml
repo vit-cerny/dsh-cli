@@ -1,0 +1,7 @@
+# Bundle patch: insert the plugin row into the profile tree.
+- insert:
+    - id: model-manager
+      name: 'dsh-import-models'
+      config:
+        enabled: true
+        allowWrite: true
