@@ -52,4 +52,5 @@ desktop.ini
 
 # ---- orchestration tool state (not project source) ----
 .expert-taskboards/
+.expert-bus/
 .t3/
