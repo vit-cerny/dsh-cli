@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { normalizeOpencodeModel, routeKey, refNameFor, protocolFor } from '../lib/sources.js';
+import { normalizeOpencodeModel, normalizeDisplayName, routeKey, refNameFor, protocolFor } from '../lib/sources.js';
 import { isChatModel, buildPlan, mergeRoutes } from '../lib/manager.js';
 import { writeState, readState, defaultStatePath } from '../lib/store.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -23,6 +23,12 @@ describe('dsh-model-manager smoke', () => {
     assert.equal(routeKey('OpenAI Codex'), 'openai-codex')
   })
 
+  it('replaces corrupted or unbounded display names', () => {
+    assert.equal(normalizeDisplayName('Ãƒ broken', '7api'), '7api')
+    assert.equal(normalizeDisplayName('x'.repeat(121), '7api'), '7api')
+    assert.equal(normalizeDisplayName('7API', 'fallback'), '7API')
+  })
+
   it('refNameFor produces env-style name', () => {
     assert.equal(refNameFor('my-gateway'), 'MY_GATEWAY_API_KEY')
   })
@@ -41,6 +47,18 @@ describe('dsh-model-manager smoke', () => {
     const plan = buildPlan([], { existingProviders: {} })
     assert.deepEqual(plan.routes, {})
     assert.equal(plan.summary.routes, 0)
+  })
+
+  it('re-import repairs a corrupt existing provider label', () => {
+    const plan = buildPlan([{
+      kind: 'provider', sourceId: 'opencode', foreignId: '7api', displayName: '7api',
+      protocol: 'openai-responses', baseURL: 'https://gateway.example/v1', models: [{ id: 'gpt-6', name: 'GPT-6' }],
+    }], {
+      existingProviders: {
+        '7api': { displayName: 'Ãƒ'.repeat(200), api: 'openai-responses', baseURL: 'https://gateway.example/v1', models: [] },
+      },
+    })
+    assert.equal(plan.routes['7api'].displayName, '7api')
   })
 
   it('mergeRoutes merges providers', () => {

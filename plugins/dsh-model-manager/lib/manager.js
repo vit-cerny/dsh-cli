@@ -3,7 +3,7 @@
  * provider routes and harness credential references/records. Pure — no I/O — so
  * the mapping can be tested without a Host.
  */
-import { routeKey, refNameFor } from './sources.js'
+import { routeKey, refNameFor, normalizeDisplayName } from './sources.js'
 
 /** Credential record scope owned by the pi-ai adapter. */
 export const RECORD_SCOPE = 'llm-pi-ai'
@@ -144,7 +144,7 @@ export function buildPlan(items, options = {}) {
       const known = new Set(priorModels.map((model) => model.id))
       plans[route] = {
         ...prior,
-        displayName: prior?.displayName ?? config.displayName,
+        displayName: normalizeDisplayName(prior?.displayName, config.displayName),
         api: prior?.api ?? config.api,
         baseURL: prior?.baseURL ?? config.baseURL,
         apiKeyEnv: prior?.apiKeyEnv ?? config.apiKeyEnv,

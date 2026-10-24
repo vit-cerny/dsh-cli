@@ -59,6 +59,12 @@ function readJsonc(path) {
 
 const REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+/** Reject unbounded or visibly mojibaked labels before they reach DSH's picker. */
+export function normalizeDisplayName(value, fallback) {
+  const name = typeof value === 'string' ? value.trim() : ''
+  return name.length > 0 && name.length <= 120 && !/(?:Ãƒ|Ã‚|â€|ï¿½|\uFFFD)/.test(name) ? name : fallback
+}
+
 /** Route key: lowercase, hyphenated. Leading digits are fine for a pi-ai route. */
 export function routeKey(raw) {
   const key = String(raw ?? '')
@@ -183,7 +189,7 @@ export function scanOpencode() {
       kind: 'provider',
       sourceId: 'opencode',
       foreignId: id,
-      displayName: raw.name ?? id,
+      displayName: normalizeDisplayName(raw.name, id),
       protocol: protocolFor(raw.package),
       baseURL: typeof settings.baseURL === 'string' ? settings.baseURL : undefined,
       apiKey: inlineKey ?? auth[id]?.key,
