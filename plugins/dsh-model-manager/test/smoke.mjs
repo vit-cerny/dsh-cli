@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { normalizeOpencodeModel, normalizeDisplayName, routeKey, refNameFor, protocolFor } from '../lib/sources.js';
 import { isChatModel, buildPlan, mergeRoutes } from '../lib/manager.js';
+import { redactPlan } from '../lib/index.js';
 import { writeState, readState, defaultStatePath } from '../lib/store.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,6 +60,31 @@ describe('dsh-model-manager smoke', () => {
       },
     })
     assert.equal(plan.routes['7api'].displayName, '7api')
+  })
+
+  it('redacts API keys, environment values and OAuth grants from import plans', () => {
+    const result = buildPlan([
+      {
+        kind: 'provider', sourceId: 'opencode', foreignId: 'example',
+        apiKey: 'api-key-test-value', models: [{ id: 'chat-model' }],
+      },
+      {
+        kind: 'oauth', sourceId: 'codex', foreignId: 'openai-codex',
+        grant: { access: 'oauth-access-test-value', refresh: 'oauth-refresh-test-value' },
+      },
+      {
+        kind: 'env', sourceId: 'env', foreignId: '.env',
+        entries: { EXAMPLE_API_KEY: 'environment-test-value' },
+      },
+    ]);
+    const safe = redactPlan(result);
+    const serialized = JSON.stringify(safe);
+    assert.equal(safe.summary.credentials, 3);
+    assert.deepEqual(safe.envRefs.map(({ ref }) => ref), ['EXAMPLE_API_KEY']);
+    for (const secret of ['api-key-test-value', 'oauth-access-test-value', 'oauth-refresh-test-value', 'environment-test-value']) {
+      assert.equal(serialized.includes(secret), false);
+      assert.equal(JSON.stringify(result).includes(secret), true);
+    }
   })
 
   it('mergeRoutes merges providers', () => {

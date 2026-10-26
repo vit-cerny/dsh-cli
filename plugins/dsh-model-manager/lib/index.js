@@ -153,10 +153,28 @@ function plan(ctx, config, request = {}) {
   return buildPlan(items, { existingProviders: currentRoutes(ctx) })
 }
 
+// Import plans must remain inside the Host: they contain API keys and OAuth grants.
+export function redactPlan(plan) {
+  return {
+    routes: plan.routes,
+    refs: plan.refs.map(({ ref }) => ({ ref })),
+    envRefs: plan.envRefs.map(({ ref, route, protocol }) => ({ ref, route, protocol })),
+    records: plan.records.map(({ key }) => ({ key })),
+    skipped: plan.skipped,
+    filtered: plan.filtered,
+    summary: {
+      ...plan.summary,
+      credentials: plan.refs.length + plan.envRefs.length + plan.records.length,
+    },
+  }
+}
+
 async function importSources(ctx, config, request = {}) {
   const credentials = ctx.get('credentials')
   const result = plan(ctx, config, request)
-  if (request.dryRun === true) return { dryRun: true, plan: result, wrote: { refs: [], records: [], routes: [] } }
+  if (request.dryRun === true) {
+    return { dryRun: true, plan: redactPlan(result), wrote: { refs: [], records: [], routes: [] } }
+  }
 
   const wrote = { refs: [], records: [], routes: [] }
   if (credentials !== undefined) {
@@ -178,7 +196,7 @@ async function importSources(ctx, config, request = {}) {
   const merged = mergeRoutes(llmConfig(ctx), result.routes, { replace: request.replace === true })
   await writeProviders(ctx, merged.providers)
   wrote.routes = Object.keys(result.routes)
-  return { plan: result, wrote }
+  return { plan: redactPlan(result), wrote }
 }
 
 async function listRoutes(ctx, config) {
@@ -258,7 +276,14 @@ async function addRoute(ctx, config, request = {}) {
   const route = typeof request.route === 'string' ? request.route.trim() : ''
   if (!/^[a-z][a-z0-9-]*$/.test(route)) throw new Error('route must be lowercase letters, digits and hyphens')
   const endpoint = typeof request.baseURL === 'string' ? request.baseURL.trim() : ''
-  if (!/^https?:\/\//.test(endpoint)) throw new Error('baseURL must be an http(s) URL')
+  let parsedEndpoint
+  try { parsedEndpoint = new URL(endpoint) } catch { throw new Error('baseURL must be an http(s) URL') }
+  if (!['http:', 'https:'].includes(parsedEndpoint.protocol) || parsedEndpoint.username !== '' || parsedEndpoint.password !== '') {
+    throw new Error('baseURL must be an http(s) URL without embedded credentials')
+  }
+  const supportedApis = new Set(['openai-completions', 'openai-responses', 'anthropic-messages'])
+  const api = typeof request.api === 'string' ? request.api : 'openai-completions'
+  if (!supportedApis.has(api)) throw new Error(`api must be one of: ${[...supportedApis].join(', ')}`)
   const models = (Array.isArray(request.models) ? request.models : [])
     .map((model) => (typeof model === 'string' ? model : model?.id))
     .filter((id) => typeof id === 'string' && id.length > 0)
@@ -268,6 +293,9 @@ async function addRoute(ctx, config, request = {}) {
   const ref = typeof request.apiKeyEnv === 'string' && request.apiKeyEnv.length > 0
     ? request.apiKeyEnv
     : `${route.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(ref)) {
+    throw new Error('apiKeyEnv must be an environment-style name such as ACME_API_KEY')
+  }
   // Store the key before the route so the route never points at a missing credential.
   const apiKey = typeof request.apiKey === 'string' ? request.apiKey.trim() : ''
   if (apiKey.length > 0) {
@@ -279,7 +307,7 @@ async function addRoute(ctx, config, request = {}) {
     ...routes,
     [route]: {
       displayName: typeof request.displayName === 'string' && request.displayName.length > 0 ? request.displayName : route,
-      api: typeof request.api === 'string' ? request.api : 'openai-completions',
+      api,
       baseURL: endpoint,
       apiKeyEnv: ref,
       models: models.map((id) => ({ id })),
@@ -350,7 +378,7 @@ function toolDefinitions(ctx, config) {
       'model_manager_plan',
       'Dry-run an import: translate the selected harnesses into DSH llm-pi-ai routes and credential references without writing, and report what would be skipped.',
       { sources },
-      (args) => plan(ctx, config, args),
+      (args) => redactPlan(plan(ctx, config, args)),
     ),
     tool(
       'model_manager_import',
@@ -469,7 +497,7 @@ function webRoutes(ctx, config) {
       path: '/api/dsh-model-manager/sources',
       handler: get((req) => scan(ctx, config, new URL(req.url ?? '/', 'http://localhost').searchParams.get('source') ?? undefined)),
     },
-    { kind: 'exact', path: '/api/dsh-model-manager/plan', handler: post((body) => plan(ctx, config, body)) },
+    { kind: 'exact', path: '/api/dsh-model-manager/plan', handler: post((body) => redactPlan(plan(ctx, config, body))) },
     { kind: 'exact', path: '/api/dsh-model-manager/import', handler: post((body) => importSources(ctx, config, body)) },
     { kind: 'exact', path: '/api/dsh-model-manager/routes', handler: get(() => listRoutes(ctx, config)) },
     { kind: 'exact', path: '/api/dsh-model-manager/route/toggle', handler: post((body) => setRouteEnabled(ctx, config, String(body.route ?? ''), body.enabled !== false)) },

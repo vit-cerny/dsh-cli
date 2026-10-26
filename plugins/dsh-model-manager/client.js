@@ -444,7 +444,8 @@ window.__ModuleLoader__.load({
                 route,
                 { api: entry.api, baseURL: entry.baseURL, apiKeyEnv: entry.apiKeyEnv, models: (entry.models ?? []).length },
               ])),
-              credentials: [...(plan.refs ?? []).map((ref) => ref.ref), ...(plan.records ?? []).map((record) => record.key)],
+              credentials: [...(plan.refs ?? []), ...(plan.envRefs ?? [])].map((ref) => ref.ref)
+                .concat((plan.records ?? []).map((record) => record.key)),
               skipped: plan.skipped ?? [],
             }, null, 2)),
           )
