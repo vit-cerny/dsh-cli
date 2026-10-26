@@ -138,7 +138,7 @@ export function normalizeOpencodeModel(key, raw) {
 export function protocolFor(pkg) {
   const value = String(pkg ?? '')
   if (value.includes('anthropic')) return 'anthropic-messages'
-  if (/(^|\/)openai$/.test(value) || value.includes('responses')) return 'openai-responses'
+  if (value.includes('responses')) return 'openai-responses'
   return 'openai-completions'
 }
 
