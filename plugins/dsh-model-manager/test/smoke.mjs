@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { normalizeOpencodeModel, normalizeDisplayName, routeKey, refNameFor, protocolFor } from '../lib/sources.js';
+import { normalizeOpencodeModel, normalizeDisplayName, opencodeConfigPaths, routeKey, refNameFor, protocolFor } from '../lib/sources.js';
 import { isChatModel, buildPlan, mergeRoutes } from '../lib/manager.js';
 import { redactPlan } from '../lib/index.js';
 import { writeState, readState, defaultStatePath } from '../lib/store.js';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -81,6 +81,8 @@ describe('dsh-model-manager smoke', () => {
     const serialized = JSON.stringify(safe);
     assert.equal(safe.summary.credentials, 3);
     assert.deepEqual(safe.envRefs.map(({ ref }) => ref), ['EXAMPLE_API_KEY']);
+    assert.equal(safe.routes.example.models[0].id, 'chat-model');
+    assert.equal('apiKey' in safe.routes.example, false);
     for (const secret of ['api-key-test-value', 'oauth-access-test-value', 'oauth-refresh-test-value', 'environment-test-value']) {
       assert.equal(serialized.includes(secret), false);
       assert.equal(JSON.stringify(result).includes(secret), true);
@@ -98,6 +100,26 @@ describe('dsh-model-manager smoke', () => {
     writeState({ disabledRoutes: {}, disabledModels: {}, envPaths: [] }, path)
     const read = readState(path)
     assert.deepEqual(read.disabledRoutes, {})
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('maps both opencode package keys to a protocol', () => {
+    // V1 opencode configs declare `npm`, V2 declares `package`; reading only one
+    // silently downgraded every provider to chat-completions.
+    assert.equal(protocolFor('@ai-sdk/anthropic'), 'anthropic-messages')
+    assert.equal(protocolFor('@ai-sdk/openai'), 'openai-completions')
+    assert.equal(protocolFor(undefined), 'openai-completions')
+  })
+
+  it('reads every opencode config file, not just the first', () => {
+    // opencode.json and opencode.jsonc can each hold different providers.
+    const dir = mkdtempSync(join(tmpdir(), 'mm-config-'))
+    const json = join(dir, 'opencode.json')
+    const jsonc = join(dir, 'opencode.jsonc')
+    writeFileSync(json, JSON.stringify({ provider: { fromJson: { npm: '@ai-sdk/openai', models: { a: {} } } } }))
+    writeFileSync(jsonc, JSON.stringify({ provider: { fromJsonc: { npm: '@ai-sdk/anthropic', models: { b: {} } } } }))
+    const paths = opencodeConfigPaths([dir])
+    assert.deepEqual(paths.sort(), [json, jsonc].sort())
     rmSync(dir, { recursive: true, force: true })
   })
 })

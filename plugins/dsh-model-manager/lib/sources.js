@@ -3,7 +3,7 @@
  * agent harnesses keep on this machine. Everything is read-only and normalized
  * into one shape the planner turns into DSH routes and credential records.
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -148,28 +148,46 @@ const OPENCODE_DIRS = [
 ]
 const OPENCODE_AUTH = join(homedir(), '.local', 'share', 'opencode', 'auth.json')
 
-function opencodeConfigPath() {
-  for (const dir of OPENCODE_DIRS) {
-    for (const name of ['opencode.jsonc', 'opencode.json']) {
+/**
+ * Every opencode config file present in `dirs`, oldest first. opencode keeps both
+ * `opencode.json` and `opencode.jsonc` and either may hold the live providers,
+ * so all of them are read and merged rather than stopping at the first hit -
+ * picking one file misses every provider the user declared in the other.
+ */
+export function opencodeConfigPaths(dirs = OPENCODE_DIRS) {
+  const found = []
+  for (const dir of dirs) {
+    for (const name of ['opencode.json', 'opencode.jsonc']) {
       const path = join(dir, name)
-      if (existsSync(path)) return path
+      if (!existsSync(path)) continue
+      let mtime = 0
+      try { mtime = statSync(path).mtimeMs } catch { /* keep 0 */ }
+      found.push({ path, mtime })
     }
   }
-  return undefined
+  return found.sort((a, b) => a.mtime - b.mtime).map((entry) => entry.path)
 }
 
 export function scanOpencode() {
-  const path = opencodeConfigPath()
-  const source = { id: 'opencode', label: 'opencode', kind: 'harness', found: path !== undefined, path, items: [], notes: [] }
-  if (path === undefined) {
+  const paths = opencodeConfigPaths()
+  const source = { id: 'opencode', label: 'opencode', kind: 'harness', found: paths.length > 0, path: paths.at(-1), items: [], notes: [] }
+  if (paths.length === 0) {
     source.notes.push('no opencode.json or opencode.jsonc found')
     return source
   }
-  const config = readJsonc(path)
-  if (config === undefined) {
-    source.notes.push(`could not parse ${path}`)
-    return source
+  // Merge oldest to newest so the file edited last wins a conflict.
+  const config = { provider: {}, providers: {} }
+  for (const path of paths) {
+    const parsed = readJsonc(path)
+    if (parsed === undefined) {
+      source.notes.push(`could not parse ${path}`)
+      continue
+    }
+    const providers = parsed.provider ?? parsed.providers ?? {}
+    Object.assign(config.provider, providers)
+    Object.assign(config.providers, providers)
   }
+  if (paths.length > 1) source.notes.push(`merged ${paths.length} config files`)
   const auth = readJson(OPENCODE_AUTH) ?? {}
   const providers = config.provider ?? config.providers ?? {}
 
@@ -190,7 +208,7 @@ export function scanOpencode() {
       sourceId: 'opencode',
       foreignId: id,
       displayName: normalizeDisplayName(raw.name, id),
-      protocol: protocolFor(raw.package),
+      protocol: protocolFor(raw.package ?? raw.npm),
       baseURL: typeof settings.baseURL === 'string' ? settings.baseURL : undefined,
       apiKey: inlineKey ?? auth[id]?.key,
       env: Array.isArray(raw.env) ? raw.env : [],
