@@ -154,9 +154,26 @@ function plan(ctx, config, request = {}) {
 }
 
 // Import plans must remain inside the Host: they contain API keys and OAuth grants.
+function safeRoute(config) {
+  if (config === null || typeof config !== 'object') return {}
+  const models = Array.isArray(config.models) ? config.models : []
+  return {
+    displayName: config.displayName,
+    api: config.api,
+    baseURL: config.baseURL,
+    apiKeyEnv: config.apiKeyEnv,
+    models: models.map((model) => ({
+      id: model?.id,
+      name: model?.name,
+      contextWindow: model?.contextWindow,
+      maxTokens: model?.maxTokens,
+    })),
+  }
+}
+
 export function redactPlan(plan) {
   return {
-    routes: plan.routes,
+    routes: Object.fromEntries(Object.entries(plan.routes).map(([route, config]) => [route, safeRoute(config)])),
     refs: plan.refs.map(({ ref }) => ({ ref })),
     envRefs: plan.envRefs.map(({ ref, route, protocol }) => ({ ref, route, protocol })),
     records: plan.records.map(({ key }) => ({ key })),

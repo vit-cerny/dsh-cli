@@ -1,0 +1,13 @@
+# dsh-web-first bundle patch. This row selects DeepSeek Search & Fetch for the
+# profile; the inserted Host plugin supplies prior-art search guidance.
+- id: web
+  config:
+    searchProvider: deepseek-search-api
+    fetchProvider: deepseek-fetch-api
+
+- id: tool-web
+  disabled: false
+
+- insert:
+    - id: web-first
+      name: 'dsh-web-first'

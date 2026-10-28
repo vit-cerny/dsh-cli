@@ -1,0 +1,39 @@
+{
+  "name": "dsh-web-first",
+  "version": "0.1.0",
+  "description": "DeepSeek Search & Fetch with GitHub prior-art guidance; add your key in the built-in Web search settings",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "test/smoke.mjs"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-bundle",
+    "web-search",
+    "deepseek",
+    "agent-reach",
+    "github"
+  ],
+  "license": "MIT",
+  "engines": {
+    "dsh": ">=0.2.1-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

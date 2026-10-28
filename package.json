@@ -20,8 +20,15 @@
   ],
   "scripts": {
     "start": "node src/main.js",
-    "test": "node --test",
-    "lint": "node --check src/main.js"
+    "install:cli": "node scripts/install.mjs",
+    "install:profile": "node scripts/install-profile.mjs",
+    "uninstall": "node scripts/uninstall.mjs",
+    "test": "node --test --test-isolation=none \"tests/**/*.test.js\"",
+    "lint": "node --check src/main.js",
+    "doctor": "node src/main.js doctor",
+    "ram:check": "node tests/ram/benchmark.mjs",
+    "ram:runtime": "node tests/ram/runtime-benchmark.mjs",
+    "ram:session": "pwsh -NoProfile -File tests/ram/session-rss.ps1"
   },
   "keywords": [
     "deepseek",

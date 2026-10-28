@@ -153,17 +153,35 @@ Claude Haiku 5.5, Qwen3.8, Gemma 4, MiniMax M3.1…), and sets the default route
 **Sync requirement:** the CLI must read the SAME profile patch layer and the same
 credential store, so providers/models/skills/MCPs do not fork into two truths.
 
-## 7. Credentials state — BLOCKER for "use my API key"
+## 7. Credentials — RESOLVED (earlier note in this file was WRONG, corrected here)
 
-`C:\Users\witek\.dsh\.credentials.yaml` today contains only:
+**Correction:** an earlier revision of this section claimed no `DEEPSEEK_API_KEY`
+existed. That was a bad regex (wrong indentation), not a fact.
+
+`C:\Users\witek\.dsh\.credentials.yaml` contains three records:
 - `client-connection/browser-session`
 - `deepseek-account-platform/device`
+- **`DEEPSEEK_API_KEY`** ← present, 35 chars, prefix `sk-`
 
-There is **no `DEEPSEEK_API_KEY` record**, and no `DEEPSEEK_API_KEY` in the process
-environment. The documented Search/Fetch API requires a bearer key. The key must be
-supplied (env var, or a `dsh-credentials` record) before live search can be verified.
-Note this is distinct from the `deepseek-account-platform` device token used by the
-shipped Anthropic-compatible search path.
+The key is NOT in the process environment; it lives in the DSH credential store.
+
+### Live verification against the documented API (executed, not assumed)
+
+```
+POST https://api.deepseek.com/v1/tools/search
+  {"query":"DeepSeek Harness","count":2,"need_content":false}
+→ 200, results=2
+  - deepseek-harness (deepseek-ai/deepseek-harness) | aihub.caict.ac.cn | score=2.6269 | authority=4
+  - DeepSeek Harness - Ollama | docs.ollama.com | score=2.4175 | authority=3
+
+POST https://api.deepseek.com/v1/tools/fetch
+  {"url":"https://api-docs.deepseek.com/guides/search"}
+→ 200, title="Search & Fetch | DeepSeek API Docs", content=10282 chars
+```
+
+⇒ Both endpoints work with the stored key. The Search/Fetch provider (T4) can be
+built and live-tested. Distinguish it from the `deepseek-account-platform` device
+token used by the shipped Anthropic-compatible search path.
 
 ## 8. Capability inventory that must appear in the CLI to match Desktop
 

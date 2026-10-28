@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "网页与 GitHub 研究",
+    "description": "使用 DeepSeek Search & Fetch 搜索网页，并在编码前查询 GitHub 先例。请在“插件 → 内置插件设置 → 网页搜索”中填写 DeepSeek API 密钥。"
+  }
+}

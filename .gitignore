@@ -27,6 +27,7 @@ yarn-error.log*
 credentials.json
 /auth.json
 .dsh/local/
+.tmp-*.json
 
 # ---- local scratch / big dumps ----
 # work/ holds local tooling dumps and opencode-config.json, which contains
@@ -35,6 +36,9 @@ work/
 tmp/
 temp/
 *.tmp
+
+# Launcher directory created by scripts/install.mjs
+.dsh-cli/
 
 # ---- coverage & test artifacts ----
 coverage/
@@ -51,6 +55,7 @@ desktop.ini
 !.vscode/extensions.json
 
 # ---- orchestration tool state (not project source) ----
+.agent-teams/
 .expert-taskboards/
 .expert-bus/
 .t3/
