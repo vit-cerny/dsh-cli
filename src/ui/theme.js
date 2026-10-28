@@ -7,6 +7,13 @@
  *   2. Every glyph has an ASCII fallback, because a Windows code page that is
  *      not UTF-8 would otherwise render `●` as `?` garbage.
  *
+ * On `dim`: SGR 2 is a *modifier*, not a colour. How far it fades text is the
+ * terminal's choice, and on a light background it can land under the 4.5:1
+ * readable minimum. `muted` therefore carries real information (token counts,
+ * cost, memory) that must not become invisible, so `DSH_CLI_NO_DIM=1` drops the
+ * attribute and keeps the text at full contrast. De-emphasis is a preference;
+ * readability is not.
+ *
  * @module src/ui/theme
  */
 
@@ -22,6 +29,18 @@ const SGR = Object.freeze({
 });
 
 /**
+ * Whether the user asked for full-contrast secondary text.
+ *
+ * @param {Record<string, string | undefined>} [env] Environment to read.
+ * @returns {boolean} True when `dim` should be skipped.
+ */
+export function wantsNoDim(env = process.env) {
+  const value = env?.DSH_CLI_NO_DIM;
+  if (value === undefined || value === null || value === '') return false;
+  return !['0', 'false', 'off', 'no'].includes(String(value).toLowerCase());
+}
+
+/**
  * Build a palette bound to one output stream.
  *
  * @param {{ color?: boolean, stream?: object, env?: Record<string, string|undefined> }} [options]
@@ -30,18 +49,22 @@ const SGR = Object.freeze({
 export function createTheme({ color, stream, env } = {}) {
   const ansi = createAnsi({ color, stream, env });
   const s = ansi.style;
+  const noDim = wantsNoDim(env);
+  // Identity when dimming is suppressed, so every call site keeps working and
+  // none of them has to know about the preference.
+  const faint = noDim ? (text) => String(text ?? '') : s(SGR.dim);
 
   const style = {
     reset: (text) => String(text ?? ''),
-    dim: s(SGR.dim),
+    dim: faint,
     bold: s(SGR.bold),
     italic: s(SGR.italic),
     underline: s(SGR.underline),
     inverse: s(SGR.inverse),
     /** Assistant prose. */
     assistant: (text) => String(text ?? ''),
-    /** Chain-of-thought; dim + italic so it recedes. */
-    reasoning: (text) => `${s(SGR.dim)(s(SGR.italic)(String(text ?? '')))}`,
+    /** Chain-of-thought; italic alone when dimming is suppressed. */
+    reasoning: (text) => `${faint(s(SGR.italic)(String(text ?? '')))}`,
     /** Tool name inside a card. */
     tool: s(SGR.bold),
     /** A human turn. */
@@ -51,13 +74,13 @@ export function createTheme({ color, stream, env } = {}) {
     error: s(31),
     info: s(36),
     accent: s(35),
-    muted: (text) => `${s(SGR.dim)(String(text ?? ''))}`,
+    muted: (text) => `${faint(String(text ?? ''))}`,
     /** `● Bash(cmd)` line. */
     running: (text) => `${s(33)(String(text ?? ''))}`,
     success: (text) => `${s(32)(String(text ?? ''))}`,
     failure: (text) => `${s(31)(String(text ?? ''))}`,
-    /** Status line: dim background-ish treatment via inverse-free dim. */
-    status: (text) => `${s(SGR.dim)(String(text ?? ''))}`,
+    /** Status line: de-emphasised, but readable when dimming is off. */
+    status: (text) => `${faint(String(text ?? ''))}`,
     statusValue: s(SGR.bold),
     /** Highlighted row in the completion menu / selected history entry. */
     selected: (text) => `${s(SGR.inverse)(String(text ?? ''))}`,

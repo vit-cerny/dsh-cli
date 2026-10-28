@@ -324,7 +324,11 @@ export function renderSessionPicker(
   const list = Array.isArray(rows)
     ? rows.filter((row) => row !== null && typeof row === 'object')
     : [];
-  if (list.length === 0) return [];
+  // An empty list must say so. Returning nothing leaves a blank screen that
+  // reads as a broken picker rather than "you have no sessions yet".
+  if (list.length === 0) {
+    return [theme.style.muted(truncateToWidth('  no sessions yet — send a prompt to create one', clampWidth(width), theme.glyph.ellipsis))];
+  }
 
   const budget = clampWidth(width);
   const visible = Math.max(1, Math.min(Math.trunc(Number(height)) || PICKER_ROWS, list.length));

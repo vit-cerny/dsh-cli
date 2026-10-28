@@ -223,9 +223,12 @@ test('a short list fits without a hint line', () => {
 });
 
 test('the picker tolerates an empty or malformed list', () => {
-  assert.deepEqual(renderSessionPicker([]), []);
-  assert.deepEqual(renderSessionPicker(null), []);
-  assert.deepEqual(renderSessionPicker([null, 'x', 7]), []);
+  // An empty picker must explain itself; a blank screen reads as broken.
+  for (const input of [[], null, undefined, [null, 'x', 7]]) {
+    const lines = renderSessionPicker(input);
+    assert.equal(lines.length, 1, `${JSON.stringify(input)} should render one hint line`);
+    assert.match(stripAnsi(lines[0]), /no sessions yet/);
+  }
 });
 
 test('picker rows stay within budget at every width', () => {
@@ -244,8 +247,9 @@ test('Toolbar.pick renders the list its session menu opens', () => {
   assert.equal(lines.length, 5, 'four rows plus hint at the instance height');
   assert.ok(lines.slice(0, 4).some((line) => line.includes('sess-006')));
   assert.equal(PICKER_ROWS, 10, 'default picker height');
-  assert.deepEqual(toolbar.pick({}), []);
-  assert.deepEqual(toolbar.pick({ sessions: [] }), []);
+  // No rows still yields the empty-state hint rather than a blank menu.
+  assert.match(stripAnsi(toolbar.pick({})[0]), /no sessions yet/);
+  assert.match(stripAnsi(toolbar.pick({ sessions: [] })[0]), /no sessions yet/);
 });
 
 test('no toolbar row ever exceeds the instance width', () => {

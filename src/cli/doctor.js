@@ -17,7 +17,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { resolveRuntimeBin } from './discover.js';
-import { readInstalledPlugins } from './plugins.js';
+import { diffPlugins, readInstalledPlugins } from './plugins.js';
+import { COPIED_ROWS } from '../../scripts/install-profile.mjs';
 
 /**
  * @typedef {object} Check
@@ -77,13 +78,24 @@ export function runChecks(context, options = {}) {
   });
 
   const plugins = readInstalledPlugins(context.dshHome);
-  const desktop = plugins.filter((row) => row.source === 'desktop').length;
-  const cli = plugins.filter((row) => row.source === 'dsh-cli').length;
+  const shared = plugins.filter((row) => row.source === 'home');
+  const diff = diffPlugins(
+    [...plugins.filter((row) => row.source === 'desktop'), ...shared],
+    [...plugins.filter((row) => row.source === 'dsh-cli'), ...shared],
+  );
+  // Only capability rows can ever be copied; Electron and UI rows are excluded
+  // on purpose, so counting them as missing would warn about a non-problem and
+  // train the user to ignore the check.
+  const copyable = new Set(COPIED_ROWS);
+  const missingCapability = diff.missing.filter((row) => copyable.has(row.id));
   checks.push({
     name: 'plugins',
-    level: cli >= desktop ? 'ok' : 'warn',
-    detail: `${desktop} desktop rows, ${cli} in the cli profile`,
-    fix: cli >= desktop ? undefined : 'dsh-cli plugins sync --apply',
+    level: missingCapability.length === 0 ? 'ok' : 'warn',
+    detail:
+      missingCapability.length === 0
+        ? `${diff.missing.length} desktop-only rows, none of them copyable capability rows`
+        : `${missingCapability.length} capability row(s) not in the cli profile`,
+    fix: missingCapability.length === 0 ? undefined : 'dsh-cli plugins sync --apply',
   });
 
   const skills = options.skills ? options.skills(context.dshHome) : listSkills(context.dshHome);

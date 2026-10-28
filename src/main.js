@@ -89,6 +89,8 @@ export function renderHelp(version) {
     '  DSH_CLI_MODEL          default model when --model is absent',
     '  DSH_CLI_REASONING=1    show chain-of-thought (hidden by default)',
     '  DSH_CLI_SHOW_SYSTEM=1  echo the runtime system prompt (hidden by default)',
+    '  DSH_CLI_NO_DIM=1       drop the dim attribute; secondary text keeps full contrast',
+    '  NO_COLOR / FORCE_COLOR disable / force ANSI colour (standard, honoured)',
     '  DSH_HOME               DSH home directory (default: ~/.dsh)',
     '',
     'Exit codes: 0 ok · 1 failure · 2 usage · 130 interrupted',

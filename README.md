@@ -136,6 +136,15 @@ Keys: `Enter` send · `Ctrl+J` newline · `↑`/`↓` history · `Tab` accept co
 
 Piping works: each line is one prompt, and each turn finishes before the next line is read.
 
+### Terminal readability
+
+The palette uses the terminal's own 16 ANSI colours, so it inherits whatever contrast your terminal theme already provides rather than fighting it. Two things it does not leave to chance:
+
+- **No colour-only signals.** Status is a glyph *and* a word (`● busy`, `○ idle`, `✗ error`), tool results carry `ok`/`failed`/`cancelled` labels, and every glyph has an ASCII fallback for a non-UTF-8 code page.
+- **`DSH_CLI_NO_DIM=1`** drops the `dim` attribute entirely. SGR 2 fades text by an amount the terminal decides, which on a light background can fall below the 4.5:1 readable minimum — and it is used for real information (token counts, cost, memory), not decoration. With the switch on, that text stays at full contrast and reasoning blocks stay distinct through italics alone.
+
+`NO_COLOR` and `FORCE_COLOR` are honoured as usual. `dsh-cli doctor` reports the route and profile; empty states say what is empty rather than rendering a blank screen.
+
 ## Migrating from another harness
 
 ```powershell
