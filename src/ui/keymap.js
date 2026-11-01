@@ -148,7 +148,11 @@ export class KeyDecoder {
         let text = '';
         for (const ch of buffer) {
           const code = ch.codePointAt(0) ?? 0;
-          if (code < 0x20) {
+          // DEL (0x7F) is the byte every terminal sends for Backspace. It is not
+          // below 0x20, so checking only that range let it through as literal
+          // text: the editor inserted an invisible character and the visible
+          // prompt never shrank.
+          if (code < 0x20 || code === 0x7f) {
             const mapped = CONTROL_KEYS[code];
             if (text) {
               events.push({ key: KEYS.text, text });
@@ -252,6 +256,22 @@ export class KeyDecoder {
 
     return events;
   }
+
+  /**
+   * Emit any pending key whose sequence can no longer be completed.
+   *
+   * A terminal sends a bare Escape as one byte and nothing after it, so the
+   * decoder holds it waiting for a possible `[A`-style continuation. Calling this
+   * after a short quiet period turns that held byte into a real `escape` event,
+   * which is what lets Escape close a menu or the session picker.
+   *
+   * @returns {Array<{ key: string, text?: string }>} The flushed events.
+   */
+  flush() {
+    if (this.pending !== '\u001b') return [];
+    this.pending = '';
+    return [{ key: KEYS.escape }];
+  }
 }
 
 /**
@@ -265,12 +285,19 @@ export class KeyDecoder {
 export function actionForKey(key, ctx = {}) {
   switch (key) {
     case KEYS.enter:
-      return ctx.suggestionOpen ? 'accept-suggestion' : 'submit';
+      // Enter always submits. Typing `/help` opens the completion menu, so
+      // "Enter accepts the suggestion" would silently turn the command into a
+      // text insert and never run it. Tab is the documented accept key.
+      // An empty prompt with the toolbar focused opens that tab instead.
+      return ctx.emptyPrompt && ctx.toolbarFocused ? 'toolbar-open' : 'submit';
     case KEYS.newline:
     case KEYS.ctrlJ:
       return 'newline';
     case KEYS.tab:
-      return ctx.suggestionOpen ? 'accept-suggestion' : 'noop';
+      // Tab accepts a highlighted command first; with no menu open it moves the
+      // toolbar, which is the only way to reach the tabs without remembering a
+      // slash command.
+      return ctx.suggestionOpen ? 'accept-suggestion' : 'toolbar-next';
     case KEYS.up:
       if (ctx.suggestionOpen) return 'suggestion-prev';
       return ctx.atFirstLine ? 'history-prev' : 'caret-up';

@@ -46,7 +46,7 @@ Add this folder to the `web` profile as a linked package, then restart the
 profile once and refresh the page:
 
 ```powershell
-dsh plugin --profile web add link:C:\Users\witek\dsh-cli\plugins\dsh-model-picker
+dsh plugin --profile web add link:C:\Users\example\dsh-cli\plugins\dsh-model-picker
 ```
 
 Client-only edits afterwards apply on a plain page refresh.

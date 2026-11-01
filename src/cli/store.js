@@ -274,7 +274,7 @@ export function readSessionSummaries(dshHome, options = {}) {
 /**
  * The encoded directory name DSH uses for a working directory.
  *
- * `C:\Users\witek\dsh-cli` → `--C-Users-witek-dsh-cli--` (backslashes become
+ * `C:\Users\example\dsh-cli` → `--C-Users-example-dsh-cli--` (backslashes become
  * dashes, a drive colon becomes a dash, wrapped in the same separator). Used
  * only to put the current project's sessions first; a mismatch is harmless
  * because the listing falls back to every workspace.

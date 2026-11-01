@@ -221,7 +221,7 @@ test('summarizeToolInput prefers the meaningful field', () => {
 
 test('shortenPath elides the middle of absolute paths', () => {
   assert.equal(shortenPath('C:\\a\\b', 40), 'C:\\a\\b');
-  const short = shortenPath('C:/Users/witek/dsh-cli/src/ui/renderer.js', 24);
+  const short = shortenPath('C:/Users/example/dsh-cli/src/ui/renderer.js', 24);
   assert.ok(short.length <= 24);
   assert.ok(short.includes('…'));
 });

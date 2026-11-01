@@ -42,7 +42,7 @@ function sessionRows(count, { activeIndex = 0 } = {}) {
     id: `sess-${String(index).padStart(3, '0')}`,
     title: `session ${index}`,
     age: index === 0 ? '42s' : `${index}m`,
-    cwd: 'C:/Users/witek/dsh-cli',
+    cwd: 'C:/Users/example/dsh-cli',
     active: index === activeIndex,
   }));
 }
@@ -169,7 +169,7 @@ test('the picker clips a long title to the column budget', () => {
       id: 'sess-long',
       title: 'a session title that is far too long to fit in one row of the picker',
       age: '3h',
-      cwd: 'C:/Users/witek/some/deeply/nested/workspace/dsh-cli',
+      cwd: 'C:/Users/example/some/deeply/nested/workspace/dsh-cli',
       active: true,
     },
   ];
