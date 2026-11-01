@@ -108,7 +108,7 @@ test('a frame never exceeds the terminal width, so no row can wrap', () => {
     const { view, text } = mount({ columns, rows: 20 });
     view.start();
     view.paint({
-      editor: editorAt([`â¯ ${'x'.repeat(columns * 2)}`]),
+      editor: editorAt([`❯ ${'x'.repeat(columns * 2)}`]),
       // A long model id and cwd are the realistic overflow source.
       status: [`model-${'y'.repeat(60)}`, `C:\\${'z'.repeat(120)}`],
       hint: [`/${'w'.repeat(columns * 2)}`],
@@ -129,18 +129,18 @@ test('the input box is a closed rectangle at every supported width', () => {
     view.start();
     view.paint({ editor: editorAt(['hello']), status: ['idle'] });
     const rows = replay([text()], 16, columns);
-    const top = rows.findIndex((row) => row.includes('â•­'));
-    const bottom = rows.findIndex((row) => row.includes('â•°'));
+    const top = rows.findIndex((row) => row.includes('╭'));
+    const bottom = rows.findIndex((row) => row.includes('╰'));
     assert.ok(top >= 0, `columns=${columns}: no top border`);
     assert.ok(bottom > top, `columns=${columns}: no bottom border`);
-    const open = rows[top].indexOf('â•­');
-    const close = rows[top].indexOf('â•®');
+    const open = rows[top].indexOf('╭');
+    const close = rows[top].indexOf('╮');
     assert.ok(close > open, `columns=${columns}: top border is not closed`);
-    assert.equal(rows[bottom].indexOf('â•°'), open, `columns=${columns}: corners misaligned`);
-    assert.equal(rows[bottom].indexOf('â•¯'), close, `columns=${columns}: bottom corners misaligned`);
+    assert.equal(rows[bottom].indexOf('╰'), open, `columns=${columns}: corners misaligned`);
+    assert.equal(rows[bottom].indexOf('╯'), close, `columns=${columns}: bottom corners misaligned`);
     for (let index = top + 1; index < bottom; index += 1) {
-      assert.equal(rows[index][open], 'â”‚', `columns=${columns}: row ${index + 1} lost its left border`);
-      assert.equal(rows[index][close], 'â”‚', `columns=${columns}: row ${index + 1} lost its right border`);
+      assert.equal(rows[index][open], '│', `columns=${columns}: row ${index + 1} lost its left border`);
+      assert.equal(rows[index][close], '│', `columns=${columns}: row ${index + 1} lost its right border`);
     }
   }
 });
