@@ -56,6 +56,12 @@ export const PROFILE_BUNDLES = Object.freeze([
   '@deepseek-ai/dsh-sdk-app',
 ]);
 
+/** Same runtime capabilities, exposed over ACP v1 for T3 Code and other clients. */
+export const ACP_PROFILE_BUNDLES = Object.freeze([
+  '@deepseek-ai/dsh-base',
+  '@deepseek-ai/dsh-acp-app',
+]);
+
 const ROW_START = /^- /;
 const ROW_ID = /^- id:\s*(\S+)\s*$/;
 
@@ -131,6 +137,20 @@ export function buildProfilePatch(desktopPatch, wanted = COPIED_ROWS, route = {}
 }
 
 /**
+ * Build the ACP profile patch. The ACP bundle owns session defaults separately
+ * from `agent-default-model`, so pin its route too; otherwise sessions start on
+ * the stock DeepSeek adapter regardless of the copied catalog.
+ *
+ * @param {string} patchText CLI profile patch text.
+ * @param {{ provider?: string, model?: string }} [route] Session route override.
+ * @returns {string} ACP patch text.
+ */
+export function buildAcpPatch(patchText, route = {}) {
+  if (route.provider === undefined || route.model === undefined) return patchText;
+  return `${patchText.trimEnd()}\n\n# ACP session default route\n- id: acp\n  config:\n    provider: ${route.provider}\n    model: ${route.model}\n`;
+}
+
+/**
  * Replace `provider:`/`model:` inside the copied default-route row.
  *
  * Rewriting the row (rather than appending a second one) keeps exactly one
@@ -171,6 +191,22 @@ export function buildProfileManifest() {
     private: true,
     dependencies: {},
     dsh: { profile: { bundles: [...PROFILE_BUNDLES] } },
+  };
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+/**
+ * The ACP profile manifest. Its default route is set per session by the ACP
+ * client, so no Desktop default is imposed.
+ *
+ * @returns {string} `package.json` contents.
+ */
+export function buildAcpProfileManifest() {
+  const manifest = {
+    name: 'dsh-profile-dsh-cli-acp',
+    private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: [...ACP_PROFILE_BUNDLES] } },
   };
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
@@ -279,7 +315,15 @@ export async function installProfile(options = {}) {
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(path.join(targetDir, 'package.json'), buildProfileManifest(), 'utf8');
   writeFileSync(patchFile, built.text, 'utf8');
-  return { written: true, targetDir, copied: built.copied, missing: built.missing };
+
+  // ACP needs the same providers/tools/web capabilities, but a different wire
+  // protocol. Reuse the exact copied rows; ACP chooses routes per session.
+  const acpDir = path.join(home, 'profiles', 'dsh-cli-acp');
+  mkdirSync(acpDir, { recursive: true });
+  writeFileSync(path.join(acpDir, 'package.json'), buildAcpProfileManifest(), 'utf8');
+  writeFileSync(path.join(acpDir, 'cordis.patch.yml'), buildAcpPatch(built.text, options), 'utf8');
+
+  return { written: true, targetDir, copied: built.copied, missing: built.missing, acpDir };
 }
 
 /**
@@ -342,6 +386,13 @@ export function main(argv = process.argv.slice(2), io = {}) {
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(path.join(targetDir, 'package.json'), buildProfileManifest(), 'utf8');
   writeFileSync(path.join(targetDir, 'cordis.patch.yml'), built.text, 'utf8');
+
+  const acpDir = path.join(options.home, 'profiles', 'dsh-cli-acp');
+  mkdirSync(acpDir, { recursive: true });
+  writeFileSync(path.join(acpDir, 'package.json'), buildAcpProfileManifest(), 'utf8');
+  writeFileSync(path.join(acpDir, 'cordis.patch.yml'), buildAcpPatch(built.text, options), 'utf8');
+
+  stdout.write(`also installed ACP v1 profile for T3 Code: ${acpDir}\n`);
   stdout.write(
     `installed. Verify with: node "C:\\Program Files\\DSH Desktop\\resources\\app\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js" --profile ${CLI_PROFILE} --dump-config\n`,
   );

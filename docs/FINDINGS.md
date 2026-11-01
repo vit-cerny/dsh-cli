@@ -1,17 +1,17 @@
-# DSH CLI — Verified Findings (read-only investigation, round 1)
+﻿# DSH CLI â€” Verified Findings (read-only investigation, round 1)
 
 All facts below were verified by reading files on disk or by running probes. Nothing here is assumed.
 
 ## 1. Existing installation (do NOT rebuild what already exists)
 
 - DSH Desktop app checkout: `C:\Program Files\DSH Desktop\resources\app`
-  - `package.json` → `dsh-plugin-desktop` v2.0.18
+  - `package.json` â†’ `dsh-plugin-desktop` v2.0.18
   - **311** packages under `node_modules\@deepseek-ai\`, all pinned `0.2.1-rc.2`
 - `dsh` CLI is already installed and on PATH:
-  `C:\Users\witek\AppData\Roaming\DSH Desktop\host-commands\desktop\...\bin\dsh.cmd`
-- `dsh -V` → `0.2.1-rc.2`
-- Profiles live in `C:\Users\witek\.dsh\profiles\`: `argusdev`, `desktop`, `web`, plus `sdk` (created during probing).
-- `DSH_HOME` = `C:\Users\witek\.dsh`
+  `C:\Users\user\AppData\Roaming\DSH Desktop\host-commands\desktop\...\bin\dsh.cmd`
+- `dsh -V` â†’ `0.2.1-rc.2`
+- Profiles live in `C:\Users\user\.dsh\profiles\`: `argusdev`, `desktop`, `web`, plus `sdk` (created during probing).
+- `DSH_HOME` = `C:\Users\user\.dsh`
 
 ## 2. Profile/bundle composition model (this is the extension seam)
 
@@ -28,10 +28,10 @@ const PROFILE_TEMPLATES = {
 ```
 
 A profile directory contains:
-- `cordis.yml` — always rewritten to `[]` (empty root; the tree is composed from patches)
-- `cordis.patch.yml` — the user patch layer, applied AFTER all bundle layers
-- `package.json` — holds `dsh.profile.bundles` array
-- `pnpm-workspace.yaml` — `nodeLinker: hoisted`, `autoInstallPeers: false`
+- `cordis.yml` â€” always rewritten to `[]` (empty root; the tree is composed from patches)
+- `cordis.patch.yml` â€” the user patch layer, applied AFTER all bundle layers
+- `package.json` â€” holds `dsh.profile.bundles` array
+- `pnpm-workspace.yaml` â€” `nodeLinker: hoisted`, `autoInstallPeers: false`
 
 Patch layer is a top-level YAML array of loader patch entries: id-targeted config
 overrides, `disabled` flags, and `insert:` lists. `!!js` expressions are allowed.
@@ -39,16 +39,16 @@ overrides, `disabled` flags, and `insert:` lists. `!!js` expressions are allowed
 **Consequence:** a new terminal app is a new bundle package + a profile whose
 `bundles` includes it. No fork of the agent core is needed.
 
-## 3. `dsh tui` is NOT shipped — this is the actual gap
+## 3. `dsh tui` is NOT shipped â€” this is the actual gap
 
 - `dsh --help` examples reference `dsh tui`, `dsh --profile tui --resume abc`,
   `dsh plugin --profile tui add <package>`.
-- `npm view @deepseek-ai/dsh-tui-app` → **404**. No TUI package exists.
+- `npm view @deepseek-ai/dsh-tui-app` â†’ **404**. No TUI package exists.
 - `PROFILE_TEMPLATES` has no `tui` entry.
-- ⇒ The `tui` profile name is reserved/documented but unimplemented. A Claude-Code-style
+- â‡’ The `tui` profile name is reserved/documented but unimplemented. A Claude-Code-style
   terminal surface is the real missing piece.
 
-## 4. The SDK wire protocol — PROVEN WORKING end to end
+## 4. The SDK wire protocol â€” PROVEN WORKING end to end
 
 `@deepseek-ai/dsh-sdk-protocol` README + `dsh-sdk-jsonrpc-server/lib/index.js`:
 
@@ -56,17 +56,17 @@ Newline-delimited JSON-RPC 2.0 over stdio. Methods:
 
 | Direction | Method | Payload |
 |---|---|---|
-| client→server | `initialize` | `{ cwd, provider, model, reasoningEffort?, maxTokens? }` → `{ serverInfo: { name: "deepseek-harness-sdk-runtime", version: "0.0.1" } }` |
-| client→server | `session/prompt` | `{ sessionId, contentBlocks }` → `{ messageId }` (durable enqueue receipt) |
-| client→server | `session/resume` | `{ sessionId }` → `{}` |
-| client→server | `session/wait` | `{ sessionId }` → `{}` (idle incl. descendants) |
-| client→server | `session/working-directory/get` | `{ sessionId }` → `{ cwd }` |
-| client→server | `session/working-directory/set` | `{ sessionId, path }` → `{ cwd }` |
-| client→server | `shutdown` | — → `{}` |
-| server→client | `session.event` | every persisted session fact |
-| server→client | `session.status` | whole-agent `running`/`idle` |
-| server→client | `subagent.started` | |
-| server→client | `subagent.finished` | `{ provider, agentId, parentSessionId, childSessionId, status, stopReason, lastAssistantMessage? }` |
+| clientâ†’server | `initialize` | `{ cwd, provider, model, reasoningEffort?, maxTokens? }` â†’ `{ serverInfo: { name: "deepseek-harness-sdk-runtime", version: "0.0.1" } }` |
+| clientâ†’server | `session/prompt` | `{ sessionId, contentBlocks }` â†’ `{ messageId }` (durable enqueue receipt) |
+| clientâ†’server | `session/resume` | `{ sessionId }` â†’ `{}` |
+| clientâ†’server | `session/wait` | `{ sessionId }` â†’ `{}` (idle incl. descendants) |
+| clientâ†’server | `session/working-directory/get` | `{ sessionId }` â†’ `{ cwd }` |
+| clientâ†’server | `session/working-directory/set` | `{ sessionId, path }` â†’ `{ cwd }` |
+| clientâ†’server | `shutdown` | â€” â†’ `{}` |
+| serverâ†’client | `session.event` | every persisted session fact |
+| serverâ†’client | `session.status` | whole-agent `running`/`idle` |
+| serverâ†’client | `subagent.started` | |
+| serverâ†’client | `subagent.finished` | `{ provider, agentId, parentSessionId, childSessionId, status, stopReason, lastAssistantMessage? }` |
 
 ### Live probe result (verbatim, reproducible)
 
@@ -92,19 +92,19 @@ session: the runtime mounted the complete tool registry, injected the skill
 catalog into the system prompt, resolved provider/model route, and streamed
 structured events. No Electron, no browser, no HTTP server.
 
-⇒ The RAM-friendly architecture is a **thin viewport over one agent core**,
+â‡’ The RAM-friendly architecture is a **thin viewport over one agent core**,
 not a reimplementation.
 
 ### Protocol caveats (from README, authoritative)
 
 - No version negotiation; `serverInfo.version` is `0.0.1`, clients do not verify.
-- **No cancel / no session-close method** — abandoning a turn means killing the process.
-- server→client *requests* are unused capability (reserved for approvals).
+- **No cancel / no session-close method** â€” abandoning a turn means killing the process.
+- serverâ†’client *requests* are unused capability (reserved for approvals).
 - `initialize` must complete before any `session/prompt` (enforced; probe confirmed
   the `SDK server is not initialized` error when racing).
-- Requests may be dispatched concurrently — do not assume ordering; await handshake.
+- Requests may be dispatched concurrently â€” do not assume ordering; await handshake.
 
-## 5. Web search: shipped provider ≠ the documented Search API
+## 5. Web search: shipped provider â‰  the documented Search API
 
 You asked to add `https://api-docs.deepseek.com/guides/search` globally.
 What actually ships differs:
@@ -123,21 +123,21 @@ What actually ships differs:
   Credential: `apiKeyEnv: DEEPSEEK_API_KEY`, sent as both `x-api-key` and
   `Authorization: Bearer`.
 
-The documented API you linked is different — raw JSON:
+The documented API you linked is different â€” raw JSON:
 
 - `POST https://api.deepseek.com/v1/tools/search`
   body `{ query, count=10, ori_question?, localization?, need_content=false }`
-  → `{ results: [{ rerank_score, title, url, snippet, summary, content, site_name, site_icon, date, authority }] }`
-  - query 1–128 chars, count 1–50
-  - operators: `site:`, `-site:`, `-`, `-"…"`, `"…"`, `lang:`, `after:`, `before:`
+  â†’ `{ results: [{ rerank_score, title, url, snippet, summary, content, site_name, site_icon, date, authority }] }`
+  - query 1â€“128 chars, count 1â€“50
+  - operators: `site:`, `-site:`, `-`, `-"â€¦"`, `"â€¦"`, `lang:`, `after:`, `before:`
 - `POST https://api.deepseek.com/v1/tools/fetch`
-  body `{ url }` (≤8192 chars, http/https, no userinfo) → `{ title, content }` (Markdown)
+  body `{ url }` (â‰¤8192 chars, http/https, no userinfo) â†’ `{ title, content }` (Markdown)
 - Auth: `Authorization: Bearer <DEEPSEEK_API_KEY>`, `Content-Type: application/json`
 - Errors: OpenAI-compatible envelope; 400/401/402/403/404/408/413/429/500/504
 - QPS: search 100, fetch 25 (per account; fetch also per-domain)
 - Billing $0.75 / 1000 successful requests each; free until 2026-11-01 Beijing time
 
-⇒ To honour the request literally, a **new web provider plugin** implementing
+â‡’ To honour the request literally, a **new web provider plugin** implementing
 `/v1/tools/search` + `/v1/tools/fetch` must be written and registered as
 `searchProvider` / `fetchProvider`. Config-only change cannot do it.
 
@@ -146,22 +146,22 @@ The documented API you linked is different — raw JSON:
 `~/.dsh/profiles/desktop/cordis.patch.yml` configures `@deepseek-ai/dsh-llm-pi-ai`
 with a `logfare` provider (OpenAI-completions API at `https://logfare.ai/v1`)
 carrying ~25 models (GLM 5.3, GPT-5 family, DeepSeek V4.1 Flash/Pro, Kimi K2.6,
-Claude Haiku 5.5, Qwen3.8, Gemma 4, MiniMax M3.1…), and sets the default route to
+Claude Haiku 5.5, Qwen3.8, Gemma 4, MiniMax M3.1â€¦), and sets the default route to
 `provider: our-free-model`, `model: experiential/deepseek-v4.1-flash-1017`,
 `reasoningEffort: deep`.
 
 **Sync requirement:** the CLI must read the SAME profile patch layer and the same
 credential store, so providers/models/skills/MCPs do not fork into two truths.
 
-## 7. Credentials — RESOLVED (earlier note in this file was WRONG, corrected here)
+## 7. Credentials â€” RESOLVED (earlier note in this file was WRONG, corrected here)
 
 **Correction:** an earlier revision of this section claimed no `DEEPSEEK_API_KEY`
 existed. That was a bad regex (wrong indentation), not a fact.
 
-`C:\Users\witek\.dsh\.credentials.yaml` contains three records:
+`C:\Users\user\.dsh\.credentials.yaml` contains three records:
 - `client-connection/browser-session`
 - `deepseek-account-platform/device`
-- **`DEEPSEEK_API_KEY`** ← present, 35 chars, prefix `sk-`
+- **`DEEPSEEK_API_KEY`** â† present, 35 chars, prefix `sk-`
 
 The key is NOT in the process environment; it lives in the DSH credential store.
 
@@ -170,23 +170,23 @@ The key is NOT in the process environment; it lives in the DSH credential store.
 ```
 POST https://api.deepseek.com/v1/tools/search
   {"query":"DeepSeek Harness","count":2,"need_content":false}
-→ 200, results=2
+â†’ 200, results=2
   - deepseek-harness (deepseek-ai/deepseek-harness) | aihub.caict.ac.cn | score=2.6269 | authority=4
   - DeepSeek Harness - Ollama | docs.ollama.com | score=2.4175 | authority=3
 
 POST https://api.deepseek.com/v1/tools/fetch
   {"url":"https://api-docs.deepseek.com/guides/search"}
-→ 200, title="Search & Fetch | DeepSeek API Docs", content=10282 chars
+â†’ 200, title="Search & Fetch | DeepSeek API Docs", content=10282 chars
 ```
 
-⇒ Both endpoints work with the stored key. The Search/Fetch provider (T4) can be
+â‡’ Both endpoints work with the stored key. The Search/Fetch provider (T4) can be
 built and live-tested. Distinguish it from the `deepseek-account-platform` device
 token used by the shipped Anthropic-compatible search path.
 
 ## 8. Capability inventory that must appear in the CLI to match Desktop
 
-Skills: `C:\Users\witek\.dsh\skills` holds ~59 skill directories (incl. office-xlsx,
-pptx, docx, pdf, browser-skill, second-brain, cap…) — the SDK probe showed the
+Skills: `C:\Users\user\.dsh\skills` holds ~59 skill directories (incl. office-xlsx,
+pptx, docx, pdf, browser-skill, second-brain, capâ€¦) â€” the SDK probe showed the
 runtime already injects `<available_skills>` into the system prompt, so skills are
 inherited automatically by any SDK client. **No per-client work needed.**
 
@@ -194,7 +194,7 @@ MCP: `dsh-mcp-config` plugin is installed; server config lives in the managed bl
 of `~/.dsh/cordis.patch.yml`; tools surface as `mcp__<server>__<tool>`. Because MCP
 is a runtime plugin, SDK clients inherit configured MCP servers the same way.
 
-## 9. RAM-friendly base — researched options
+## 9. RAM-friendly base â€” researched options
 
 Evidence gathered from public comparisons (treat as indicative, not benchmarked here):
 
@@ -213,7 +213,7 @@ absent (checked `~/.cargo/bin`, `Program Files\Rust*`, `LocalAppData\Programs\Ru
 dominated by the *agent runtime* (Node + 311 packages + tool registry + skill
 catalog), not by the terminal renderer. Duplicating the runtime in Rust would add a
 second copy of everything. Running ONE `dsh` SDK runtime process and rendering it in
-a thin client means total RSS ≈ one runtime, regardless of how many viewports attach.
+a thin client means total RSS â‰ˆ one runtime, regardless of how many viewports attach.
 
 So: thin client (low cost to build, zero runtime duplication) + optionally a native
 renderer later. A from-scratch Rust agent core is explicitly the *worst* option for
@@ -225,11 +225,11 @@ already work.
 "let other agent harnesses start a new DSH CLI session on the same project."
 
 Two already-shipped surfaces serve this, and both are cheaper than inventing one:
-- `dsh-sdk-app` / `dsh-sdk-jsonrpc-server` — this very JSON-RPC stdio protocol.
+- `dsh-sdk-app` / `dsh-sdk-jsonrpc-server` â€” this very JSON-RPC stdio protocol.
   Any harness that can spawn a child process and write JSON lines can drive it.
-- `dsh-acp-app` — Agent Client Protocol bundle (`dsh-acp`, `@agentclientprotocol/sdk`
+- `dsh-acp-app` â€” Agent Client Protocol bundle (`dsh-acp`, `@agentclientprotocol/sdk`
   1.4.0 in devDeps), the emerging cross-harness standard (Zed et al.).
 - Also `dsh headless "task"` for one-shot non-interactive invocation.
 
-⇒ "Callable by other harnesses" = ACP + SDK stdio + headless one-shot, all reusing
+â‡’ "Callable by other harnesses" = ACP + SDK stdio + headless one-shot, all reusing
 the same session store and project working directory.

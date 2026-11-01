@@ -13,7 +13,7 @@ dsh-cli run "why does the build fail?" --cwd . --timeout 5m
 
 `dsh` can boot a `web` profile, a `headless` profile, or an `sdk` profile. It cannot boot a terminal UI: the documented `dsh tui` profile has no package behind it (`npm view @deepseek-ai/dsh-tui-app` is a 404). This is that missing surface, built on the protocol DSH already exposes.
 
-RAM is the second reason. A second agent core would mean a second copy of the whole runtime. One SDK runtime plus a thin renderer measures ~250 MiB for a live turn, of which the runtime child is ~200 MiB, against 506–532 MiB across 8 Electron processes for the Desktop app. See [docs/reports/RAM-BUDGET.md](docs/reports/RAM-BUDGET.md).
+RAM is the second reason. A second agent core would mean a second copy of the whole runtime. One SDK runtime plus a thin renderer measures ~250 MiB for a live turn, of which the runtime child is ~200 MiB, against 506–532 MiB across 8 Electron processes for the Desktop app. See [docs/reports/RAM-BUDGET.md](docs/reports/RAM-BUDGET.md) for the measurements and [docs/reports/HARNESS-COMPARISON.md](docs/reports/HARNESS-COMPARISON.md) for why no external harness (including Rust options like rab and jcode) was adopted instead.
 
 ## Requirements
 
@@ -77,6 +77,31 @@ node scripts/install-profile.mjs
 
 Because the default route is copied from Desktop, re-running resets it to whatever Desktop uses. Pick another per invocation with `--provider`/`--model`, or switch mid-session with `/model`.
 
+## T3 Code (ACP v1)
+
+The installer also writes `~/.dsh/profiles/dsh-cli-acp`, a sibling profile that speaks **Agent Client Protocol v1** instead of the terminal JSON-RPC protocol. Use it when T3 Code should drive DSH.
+
+```powershell
+node scripts/install-profile.mjs --provider 7api --model gpt-6-luna
+node scripts/register-t3-provider.mjs --dry-run   # show what it would add
+node scripts/register-t3-provider.mjs             # add the provider to T3
+```
+
+`register-t3-provider.mjs` adds one `providerInstances` entry to `~/.t3/userdata/settings.json` (or `$T3CODE_HOME`):
+
+| Field | Value |
+|---|---|
+| Instance id | `acpRegistry` |
+| Driver | `acpRegistry`, source **Local command** |
+| Executable | `C:\Program Files\nodejs\node.exe` |
+| Arguments | `C:\Program Files\DSH Desktop\resources\app\node_modules\@deepseek-ai\dsh\lib\bin.js --profile dsh-cli-acp` |
+
+It never touches project data, sessions or credentials, and leaves an existing entry alone unless you pass `--force`. Restart the T3 server, then pick **DSH CLI** as the provider.
+
+T3 then creates sessions through DSH, streams replies, and uses the same tools/providers/skills as `dsh-cli`. Verified end-to-end: a T3 thread writes and reads a file through the DSH ACP profile.
+
+The ACP bundle owns session defaults separately from `agent-default-model`, so the installer pins its route too (`- id: acp`). Without that, ACP sessions would start on the stock DeepSeek adapter even when the catalog points elsewhere.
+
 ## Uninstall
 
 ```powershell
@@ -111,15 +136,24 @@ Exit codes: `0` success, `1` failure, `2` usage error, `130` interrupted.
 
 ## The interactive UI
 
-The top row is a toolbar, persisted like a status bar:
+A full-screen layout on the alternate screen, in the shape opencode uses:
 
 ```
-[3 ❯ dsh-cli] · logfare/deepseek-v4.1-flash · 12.4k tok · $0.0031 · 251 MiB · ● busy
+❯ why does the build fail
+● pwsh({"command":"npm run build","workdir":"."})  ✓ 1.2s
+  src/index.ts(12,4): error TS2304: Cannot find name 'foo'.
+
+╭──────────────────────────────────────────────────────────────╮
+│ ❯ fix that                                                   │
+╰──────────────────────────────────────────────────────────────╯
+idle · logfare/deepseek-v4.1-flash · 12.4k tok · $0.0031 · ~/proj
 ```
 
-Session, model, live tokens, live cost, memory, state. Segments drop from the right as the terminal narrows, so the session label always survives.
+The transcript scrolls in a fixed viewport; the input box is a rounded border that grows with the prompt (up to the available height); the status bar is pinned to the last row. A tool call appears once and its glyph flips from `○` running to `● ✓ done` when the result arrives, rather than printing a second card.
 
-Cost is priced from the model catalog installed with Desktop, split correctly between cached and uncached input. When a route has no catalog entry the toolbar says `cost unknown` rather than inventing a number — third-party gateways are the common case, since a gateway's model id usually is not in the catalog. Declare the real rates once in `$DSH_HOME/dsh-cli-pricing.json` (USD per 1M tokens) and they are used:
+The status bar is ordered by priority, and narrow terminals drop segments from the end instead of clipping the row. State (`idle` / `working…` / `interrupted`) always survives, because it is the one thing the bar exists to say; the working directory is the first to go.
+
+Cost is priced from the model catalog installed with Desktop, split correctly between cached and uncached input. When a route has no catalog entry the bar says `cost unknown` rather than inventing a number. Third-party gateways are the common case, since a gateway's model id usually is not in the catalog. Declare the real rates once in `$DSH_HOME/dsh-cli-pricing.json` (USD per 1M tokens) and they are used:
 
 ```json
 {
@@ -130,11 +164,26 @@ Cost is priced from the model catalog installed with Desktop, split correctly be
 
 An exact `provider/model` key wins over `provider/*`, which wins over `*`. A malformed or absent file means "no override", never a failure to start.
 
-Slash commands: `/help`, `/sessions`, `/model [<provider>/<model>]`, `/usage`, `/plugins`, `/migrate`, `/cwd`, `/clear`, `/quit`. Type `/` to get the completion menu.
+Slash commands: `/help`, `/sessions`, `/model [<provider>/<model>]`, `/usage`, `/plugins`, `/migrate`, `/cwd`, `/clear`, `/quit`. Type `/` to get the completion menu; `Tab` accepts the highlighted entry and `Enter` always runs what you typed.
+
+### Choosing a model
+
+A profile can carry hundreds of models across a dozen providers, so `/model` with a typed id is the slow path. `/model` with no argument opens a searchable picker instead: type a few letters, arrow to the row, `Enter`.
+
+```
+ models  type to filter · Enter select · Tab favourite · Esc cancel
+ ❯ deep
+ ★ api7/gpt-6-sol                     GPT-6 Sol
+ ★ api7/gpt-6-luna                    GPT-6 Luna
+   logfare/deepseek-v4.1-flash-1017   DeepSeek V4.1 Flash 1017
+   api7/kimi-k3                       Kimi K3
+```
+
+`Tab` stars the highlighted model and it sorts to the top, so the handful of routes you actually use stay reachable without searching at all. Favourites live in `$DSH_CLI_HOME/favourites.json` (default `~/.dsh-cli/`); a missing or corrupt file reads as "no favourites" rather than breaking the picker. `/sessions` opens the same picker over persisted sessions.
 
 Keys: `Enter` send · `Ctrl+J` newline · `↑`/`↓` history · `Tab` accept completion · `Ctrl+O` expand the last tool output · `Ctrl+L` clear · `Ctrl+C` abort or quit · `Ctrl+D` quit.
 
-Piping works: each line is one prompt, and each turn finishes before the next line is read.
+Piping works: each line is one prompt, and each turn finishes before the next line is read. A pipe is not a terminal, so it gets the plain line-oriented output instead of the full-screen layout.
 
 ### Terminal readability
 
@@ -180,15 +229,31 @@ These are protocol and surface facts, not unfinished work.
 - **No Desktop browser surfaces.** The visual workspace, session search timeline, image previews and settings panels are Web UI. The CLI does not attempt to reproduce them.
 - **MCP and skills are whatever the profile configures.** The CLI reports them; it does not add servers itself.
 - **Long sessions grow the runtime.** The measured ~250 MiB is a short turn; tool-heavy sessions grow the agent process, which the client does not bound.
-- **Web search/fetch needs a live DeepSeek key.** If the stored key is rejected, those two tools return HTTP 401 while everything else keeps working.
+- **Web search needs a live DeepSeek key.** The profile routes `web_search` to DeepSeek's `/v1/tools/search`, which bills against your API key; a rejected key returns HTTP 401. `web_fetch` is independent — the CLI profile sets `fetchProvider: http`, which fetches pages directly and needs no credential, so page reads keep working when search does not.
 
 ## Development
 
 ```powershell
-node --test --test-isolation=none "tests/*.test.js"
+npm test            # unit suite, about a second
+npm run test:gui    # drives the real TUI in a terminal
 ```
 
 On an unrestricted machine plain `node --test` works. Inside a sandbox that blocks child processes, the runner cannot spawn its per-file workers and fails with `spawn EPERM`; `--test-isolation=none` runs the same files in-process.
+
+### GUI tests
+
+The interactive UI cannot be tested through a pipe. `App` checks `stdin.isTTY && stdout.isTTY` and takes a different code path in line mode, so a piped test passes while the real screen is broken. Every bug this project shipped — the cursor arithmetic that erased the transcript on each keystroke, Enter never submitting, Ctrl+D hanging, a resize blanking the frame — was invisible to piped tests and obvious in a terminal.
+
+`npm run test:gui` therefore allocates a Windows pseudo-terminal (`node-pty`), replays the byte stream into `@xterm/headless`, and asserts on the rendered cell grid: the input box is a closed rectangle, the status bar stays on the last row, the prompt glyph never smears, Enter clears the box, Tab accepts a completion (and cycles the header tabs when no menu is open), a tab's command output actually reaches the screen, a narrow terminal keeps its state marker, and Ctrl+D exits with code 0.
+
+Both packages ship with DSH Desktop, so this adds no dependency to the CLI. The cases are skipped by default because each launches the application and its child runtime (about a minute for all nine); `DSH_CLI_GUI=1` enables them, which `npm run test:gui` sets for you.
+
+Two things the harness deliberately cannot cover, both documented at the point of omission in `tests/helpers/pty-harness.js`:
+
+- **Resize.** A Windows ConPTY never notifies the child, so `process.stdout.columns` keeps its original value and no `resize` event fires. The app's handler is covered by `tests/ui-resize.test.js`, which drives a fake TTY and fires the event directly.
+- **Real model turns.** The cases drive the UI, not the provider, so they need no credential and cost nothing. The transcript path is covered by the unit tests instead.
+
+`tests/gui/capture.mjs` prints one live frame, for when a case fails and the screen itself is the evidence.
 
 Zero runtime dependencies, pure ESM, no build step. Architecture decisions and the protocol evidence behind them: [docs/FINDINGS.md](docs/FINDINGS.md), [docs/reports/ADR-001-stack.md](docs/reports/ADR-001-stack.md), [docs/reports/CLI-PARITY.md](docs/reports/CLI-PARITY.md), [docs/CONTRACTS.md](docs/CONTRACTS.md).
 

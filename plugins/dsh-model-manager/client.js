@@ -38,6 +38,15 @@ window.__ModuleLoader__.load({
       'state.records': '已保存的 OAuth 凭据',
       'state.imported': '导入完成',
       'state.modelSearch': '搜索模型…',
+      'fav.title': '收藏模型',
+      'fav.intro': '收藏的模型会置顶显示在输入框的模型选择器中，并在其中随时可搜索。',
+      'fav.search': '搜索全部模型…',
+      'fav.add': '加入收藏',
+      'fav.remove': '取消收藏',
+      'fav.empty': '还没有模型 —— 先在上方导入提供方，再收藏常用的模型。',
+      'fav.none': '还没有收藏。在下方给模型加星标。',
+      'fav.unavailable': '收藏功能需要 dsh-model-picker 插件，其接口未响应。',
+      'fav.count': '{count} 个收藏',
       'kind.provider': 'API 提供方',
       'kind.oauth': 'OAuth 登录',
       'kind.env': '.env 文件',
@@ -80,6 +89,15 @@ window.__ModuleLoader__.load({
       'state.records': 'Stored OAuth sign-ins',
       'state.imported': 'Imported',
       'state.modelSearch': 'Search models…',
+      'fav.title': 'Favourite models',
+      'fav.intro': 'Starred models are pinned to the top of the composer model picker and stay searchable there.',
+      'fav.search': 'Search all models…',
+      'fav.add': 'Add to favourites',
+      'fav.remove': 'Remove from favourites',
+      'fav.empty': 'No models yet — import a provider above, then star the models you use most.',
+      'fav.none': 'No favourites yet. Star a model below.',
+      'fav.unavailable': 'Favourites need the dsh-model-picker plugin; its API did not answer.',
+      'fav.count': '{count} favourite(s)',
       'kind.provider': 'API provider',
       'kind.oauth': 'OAuth sign-in',
       'kind.env': '.env file',
@@ -159,6 +177,12 @@ window.__ModuleLoader__.load({
 .mm_tag.off{opacity:.5;border-style:dashed}
 .mm_tagX{border:none;background:none;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:13px;line-height:1;padding:0}
 .mm_tagX:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
+.mm_star{border:none;background:none;color:var(--dsw-alias-label-caption);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
+.mm_star.on{color:var(--dsw-alias-state-warn-label)}
+.mm_favRow{display:flex;align-items:center;gap:6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-layer-1);padding:4px 8px;min-width:0}
+.mm_favRow.on{border-color:color-mix(in srgb,var(--dsw-alias-state-warn-label) 45%,var(--dsw-alias-border-l3))}
+.mm_favName{font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.mm_favRoute{flex:none;font-family:var(--ds-font-family-code);font-size:10px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
 `
 
     function ensureStyle() {
@@ -181,6 +205,7 @@ window.__ModuleLoader__.load({
       addRoute: '/api/dsh-model-manager/route/add',
       toggleModel: '/api/dsh-model-manager/model/toggle',
       secret: '/api/dsh-model-manager/secret',
+      favorites: '/api/dsh-model-picker/favorites',
     }
 
     async function request(path, options) {
@@ -308,8 +333,116 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function RouteRow({ route, busy, openModels, onOpenModels, onDisable, onRemove, onToggleModel }) {
-      return h(React.Fragment, null,
+    /**
+     * Favourite models: one searchable list across every route, with a star per
+     * model. The same list drives the composer model picker (dsh-model-picker),
+     * which is why it lives in the Host and not in this page's state.
+     */
+    function FavoritesPanel({ routes }) {
+      const [favorites, setFavorites] = useState(undefined)
+      const [query, setQuery] = useState('')
+      const [failure, setFailure] = useState('')
+      const [busy, setBusy] = useState(false)
+
+      const load = useCallback(async () => {
+        try {
+          const body = await request(API.favorites)
+          setFavorites(Array.isArray(body.favorites) ? body.favorites : [])
+          setFailure('')
+        } catch (error) {
+          setFavorites([])
+          setFailure(error.message)
+        }
+      }, [])
+
+      useEffect(() => { load() }, [load])
+
+      const toggle = async (key) => {
+        setBusy(true)
+        const on = !(favorites ?? []).includes(key)
+        setFavorites((current) => (on
+          ? [...(current ?? []).filter((entry) => entry !== key), key]
+          : (current ?? []).filter((entry) => entry !== key)))
+        try {
+          const body = await post(API.favorites, { key, favorite: on })
+          if (Array.isArray(body.favorites)) setFavorites(body.favorites)
+          setFailure('')
+        } catch (error) {
+          setFailure(error.message)
+          await load()
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const all = useMemo(() => {
+        const rows = []
+        for (const route of routes) {
+          const seen = new Set()
+          for (const model of route.models ?? []) {
+            seen.add(model.id)
+            rows.push({ key: `${route.route}/${model.id}`, route: route.route, id: model.id, name: model.name })
+          }
+          for (const model of route.disabledModels ?? []) {
+            if (seen.has(model.id)) continue
+            rows.push({ key: `${route.route}/${model.id}`, route: route.route, id: model.id, name: model.name, disabled: true })
+          }
+        }
+        const needle = query.trim().toLowerCase()
+        const matching = needle === ''
+          ? rows
+          : rows.filter((row) => row.id.toLowerCase().includes(needle)
+            || String(row.name ?? '').toLowerCase().includes(needle)
+            || row.route.toLowerCase().includes(needle))
+        const starred = new Set(favorites ?? [])
+        return {
+          starred: matching.filter((row) => starred.has(row.key)),
+          rest: matching.filter((row) => !starred.has(row.key)),
+        }
+      }, [routes, query, favorites])
+
+      const row = (entry) => {
+        const on = (favorites ?? []).includes(entry.key)
+        return h('div', { key: entry.key, className: on ? 'mm_favRow on' : 'mm_favRow' },
+          h('button', {
+            type: 'button',
+            className: on ? 'mm_star on' : 'mm_star',
+            title: t(on ? 'fav.remove' : 'fav.add'),
+            'aria-pressed': on,
+            'aria-label': `${t(on ? 'fav.remove' : 'fav.add')}: ${entry.name ?? entry.id}`,
+            disabled: busy,
+            onClick: () => toggle(entry.key),
+          }, on ? '★' : '☆'),
+          h('span', { className: 'mm_favName', title: entry.name ?? entry.id }, entry.name ?? entry.id),
+          h('span', { className: 'mm_favRoute' }, entry.route),
+        )
+      }
+
+      return h('div', { className: 'mm_card' },
+        h('div', { className: 'mm_cardHead' },
+          h('span', { className: 'mm_cardName' }, t('fav.title')),
+          favorites === undefined ? null : h(Chip, null, t('fav.count').replace('{count}', String(favorites.length))),
+        ),
+        h('p', { className: 'mm_note' }, t('fav.intro')),
+        failure !== '' ? h('p', { className: 'mm_err' }, `${t('fav.unavailable')} (${failure})`) : null,
+        routes.length === 0
+          ? h('div', { className: 'mm_note' }, t('fav.empty'))
+          : h(React.Fragment, null,
+            h('input', {
+              className: 'mm_input',
+              placeholder: t('fav.search'),
+              value: query,
+              onChange: (event) => setQuery(event.target.value),
+            }),
+            all.starred.length > 0
+              ? h('div', { className: 'mm_list' }, all.starred.map(row))
+              : h('div', { className: 'mm_note' }, t('fav.none')),
+            h('div', { className: 'mm_list' }, all.rest.slice(0, 200).map(row)),
+          ),
+      )
+    }
+
+    function RouteRow({ route, busy, openModels, onOpenModels, onDisable, onRemove, onToggleModel }) {      return h(React.Fragment, null,
         h('tr', null,
           h('td', null,
             h('div', { className: 'mm_code' }, route.route),
@@ -509,6 +642,8 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'mm_note' }, `disabled: ${routesData.disabledRoutes.join(', ')}`)
             : null,
         ),
+
+        h(FavoritesPanel, { routes }),
       )
     }
 

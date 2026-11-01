@@ -1,4 +1,4 @@
-# Interoperating with dsh-cli
+﻿# Interoperating with dsh-cli
 
 Use the CLI as a child process when another harness needs a DSH turn in the same working directory. It starts the `dsh-cli` profile when installed (falling back to `sdk`) and reuses DSH's persisted sessions, configured providers, skills and tools.
 
@@ -7,7 +7,7 @@ Use the CLI as a child process when another harness needs a DSH turn in the same
 PowerShell example:
 
 ```powershell
-node C:\Users\witek\dsh-cli\src\main.js `
+node C:\Users\user\dsh-cli\src\main.js `
   --cwd C:\work\my-project `
   run "Review the changed files and summarize risks" `
   --timeout 5m

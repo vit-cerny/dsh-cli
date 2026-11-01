@@ -1,10 +1,10 @@
-# DeepSeek Search/Fetch provider audit
+﻿# DeepSeek Search/Fetch provider audit
 
 **Scope:** read-only inspection of the installed DSH Desktop packages and the selected Desktop profile. No credential values were read or printed, no live Search/Fetch calls were made, and no installed runtime/profile files or provider IDs were changed or duplicated.
 
 ## Which provider is selected
 
-The Desktop profile selects `deepseek-search-api` and `deepseek-fetch-api` in `C:\Users\witek\.dsh\profiles\desktop\cordis.patch.yml:54-58`. These IDs belong to the installed `@deepseek-ai/dsh-web-deepseek-api` package (`C:\Program Files\DSH Desktop\resources\app\node_modules\@deepseek-ai\dsh-web-deepseek-api\lib\index.js`), not to the similarly named Messages provider.
+The Desktop profile selects `deepseek-search-api` and `deepseek-fetch-api` in `C:\Users\user\.dsh\profiles\desktop\cordis.patch.yml:54-58`. These IDs belong to the installed `@deepseek-ai/dsh-web-deepseek-api` package (`C:\Program Files\DSH Desktop\resources\app\node_modules\@deepseek-ai\dsh-web-deepseek-api\lib\index.js`), not to the similarly named Messages provider.
 
 The installed `dsh-base` bundle includes the API package and its providers. Its `cordis.patch.yml:454-481` describes the selected Search/Fetch API pair and mounts the `web-deepseek-api` row; it also mounts the separate Messages-search row. In the package implementation, IDs are declared at `lib/index.js:213-218` and `304-305`, and both are registered at `375-389`. Search and Fetch use the raw tools endpoints: the default base is `https://api.deepseek.com/v1/tools` (`216-218`), with `/search` and `/fetch` appended (`268-284`, `322-326`). The settings page confirms the paired switch behavior: `dsh-client-ui-settings-web-search/lib/client.js:195-230` maps the API selection to these two IDs and the Messages selection to `deepseek-official` plus local `http` fetch.
 

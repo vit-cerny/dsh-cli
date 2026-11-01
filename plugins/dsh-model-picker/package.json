@@ -1,0 +1,49 @@
+{
+  "name": "dsh-model-picker",
+  "version": "0.1.0",
+  "description": "Favourite models and a search field for the [DSH] composer model selector, plus a shared favourites list for the Model Manager settings page.",
+  "type": "module",
+  "private": false,
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "model-picker",
+    "favourites",
+    "favorites"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-model-selection"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test --test-isolation=none test/smoke.mjs"
+  }
+}

@@ -1,0 +1,7 @@
+# Bundle patch: insert the plugin row into the profile tree. The Host half only
+# serves the favourites list; every visible control lives in client.js.
+- insert:
+    - id: model-picker
+      name: 'dsh-model-picker'
+      config:
+        enabled: true

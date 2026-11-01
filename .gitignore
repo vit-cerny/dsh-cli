@@ -59,3 +59,10 @@ desktop.ini
 .expert-taskboards/
 .expert-bus/
 .t3/
+
+# ---- local toolchains ----
+# .tools/ is a per-machine Rust toolchain (rustup + cargo, ~770 MB of binaries).
+# It is never project source: the Rust client builds from rust/Cargo.toml with
+# whatever toolchain the user already has.
+.tools/
+rust/target/

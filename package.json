@@ -24,6 +24,7 @@
     "install:profile": "node scripts/install-profile.mjs",
     "uninstall": "node scripts/uninstall.mjs",
     "test": "node --test --test-isolation=none \"tests/**/*.test.js\"",
+    "test:gui": "node tests/gui/run.mjs",
     "lint": "node --check src/main.js",
     "doctor": "node src/main.js doctor",
     "ram:check": "node tests/ram/benchmark.mjs",
