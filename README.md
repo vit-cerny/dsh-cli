@@ -259,4 +259,4 @@ Zero runtime dependencies, pure ESM, no build step. Architecture decisions and t
 
 ## Licence
 
-UNLICENSED — this is a personal tool, not a published package.
+MIT. See [LICENSE](LICENSE).

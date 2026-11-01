@@ -4,7 +4,7 @@
   "description": "DeepSeek Harness terminal client: zero-build, zero-runtime-dependency ESM CLI",
   "type": "module",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "node": ">=22.19.0"
   },
@@ -37,5 +37,13 @@
     "cli",
     "tui",
     "esm"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vit-cerny/dsh-cli.git"
+  },
+  "homepage": "https://github.com/vit-cerny/dsh-cli#readme",
+  "bugs": {
+    "url": "https://github.com/vit-cerny/dsh-cli/issues"
+  }
 }
