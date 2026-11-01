@@ -1,7 +1,7 @@
 {
   "name": "dsh-model-picker",
   "version": "0.1.0",
-  "description": "Favourite models and a search field for the [DSH] composer model selector, plus a shared favourites list for the Model Manager settings page.",
+  "description": "Search and favourites for the DSH composer model selector, with a shared favourites list the Model Manager settings page edits too.",
   "type": "module",
   "private": false,
   "main": "lib/index.js",
@@ -14,13 +14,16 @@
     "lib/index.js",
     "client.js",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "keywords": [
     "dsh",
     "deepseek-harness",
     "dsh-plugin",
+    "dsh-bundle",
     "model-picker",
+    "model-selector",
     "favourites",
     "favorites"
   ],
@@ -45,5 +48,14 @@
   "license": "MIT",
   "scripts": {
     "test": "node --test --test-isolation=none test/smoke.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vit-cerny/dsh-cli.git",
+    "directory": "plugins/dsh-model-picker"
+  },
+  "homepage": "https://github.com/vit-cerny/dsh-cli/tree/main/plugins/dsh-model-picker#readme",
+  "bugs": {
+    "url": "https://github.com/vit-cerny/dsh-cli/issues"
   }
 }
