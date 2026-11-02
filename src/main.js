@@ -31,6 +31,7 @@ import { runPluginsCommand } from './cli/plugins.js';
 import { runMigrateCommand } from './cli/migrate.js';
 import { runUsageCommand } from './cli/usage-command.js';
 import { runDoctorCommand } from './cli/doctor.js';
+import { runT3Command } from './cli/t3.js';
 import { parseTimeout, runOnce } from './cli/run.js';
 import { writeLine } from './cli/index.js';
 
@@ -80,7 +81,8 @@ export function renderHelp(version) {
     '  --timeout <duration>   `run` only: per-turn limit, e.g. 90s, 5m (default: 10m)',
     '  --json                 output machine-readable inventory for models/providers/skills/mcp',
     '  --apply                `plugins sync` / `migrate`: write changes (default is a dry run)',
-    '  --force                `migrate`: overwrite an existing destination',
+    '  --force                `migrate` / `t3 register`: replace an existing entry',
+    '  --dry-run              `t3`: show what would change without writing',
     '',
     'Environment:',
     '  DSH_CLI_RUNTIME_BIN    runtime entry point (default: auto-detected Desktop install)',
@@ -228,6 +230,16 @@ export async function dispatch(argv, options = {}) {
         }
         if (command.name === 'doctor') {
           return runDoctorCommand(context, { stdout });
+        }
+        if (command.name === 't3') {
+          return runT3Command(context, {
+            stdout,
+            stderr,
+            action: parsed.positionals[0] ?? 'status',
+            force: parsed.options.force === true,
+            dryRun: parsed.options.dryRun === true,
+            json: parsed.options.json === true,
+          });
         }
         return runInfoCommand(context, /** @type {'providers'|'models'|'skills'|'mcp'} */ (command.name), {
           stdout,

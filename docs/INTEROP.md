@@ -1,6 +1,31 @@
-﻿# Interoperating with dsh-cli
+# Interoperating with dsh-cli
 
 Use the CLI as a child process when another harness needs a DSH turn in the same working directory. It starts the `dsh-cli` profile when installed (falling back to `sdk`) and reuses DSH's persisted sessions, configured providers, skills and tools.
+
+## T3 Code over Agent Client Protocol
+
+T3 Code cannot spawn an arbitrary CLI as a provider, but its `acpRegistry` driver accepts a **local** command and speaks ACP over stdio. DSH ships an ACP v1 server, and `scripts/install-profile.mjs` writes a `dsh-cli-acp` profile for it, so registration is configuration only.
+
+```powershell
+dsh-cli t3 register     # write providerInstances.acpRegistry
+dsh-cli t3 status       # show the registered command and profile
+dsh-cli t3 unregister   # remove it
+```
+
+The entry written to `~/.t3/userdata/settings.json` is:
+
+| Field | Value |
+|---|---|
+| Instance id | `acpRegistry` |
+| Driver | `acpRegistry`, source `local` |
+| Command | `node.exe` |
+| Arguments | `<DSH>/lib/bin.js --profile dsh-cli-acp` |
+
+Register refuses to replace an existing entry without `--force`, supports `--dry-run`, leaves every other settings key untouched, and refuses to rewrite a settings file it cannot parse. `T3CODE_HOME` overrides the T3 data directory.
+
+Verified by hand against the installed runtime: `initialize` returns `agentInfo.name = deepseek-harness-acp` and advertises `sessionCapabilities: {close, list, resume}`; `session/new` returns a session id plus a model selector built from every configured route; `session/prompt` streams `agent_message_chunk` text and finishes with `stopReason: "end_turn"`. A cold handshake took roughly 15 seconds, so T3 shows the provider as connecting for a while.
+
+The ACP profile pins its own default route (`agent-default-model` is copied too), while a session can switch models through the selector. Credentials stay in the DSH store: DSH reports an empty `authMethods` list, so T3 never handles a key.
 
 ## One-shot invocation
 

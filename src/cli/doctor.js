@@ -18,6 +18,7 @@ import process from 'node:process';
 
 import { resolveRuntimeBin } from './discover.js';
 import { diffPlugins, readInstalledPlugins } from './plugins.js';
+import { readT3Settings, resolveT3Home } from './t3.js';
 import { COPIED_ROWS } from '../../scripts/install-profile.mjs';
 
 /**
@@ -110,6 +111,26 @@ export function runChecks(context, options = {}) {
     name: 'sessions',
     level: 'ok',
     detail: path.join(context.dshHome, 'sessions'),
+  });
+
+  // T3 Code is optional, so an unregistered provider is information, not a
+  // warning: most machines do not run it and nothing is broken.
+  const t3Home = resolveT3Home(context.env ?? process.env);
+  const t3 = readT3Settings(t3Home);
+  const provider = t3.settings?.providerInstances?.acpRegistry;
+  checks.push({
+    name: 't3 code',
+    level: 'ok',
+    detail:
+      provider === undefined
+        ? `not registered (dsh-cli t3 register)`
+        : `DSH CLI provider (${provider.enabled === false ? 'disabled' : 'enabled'}), profile ${provider.config?.commandArgs?.[2] ?? '?'}`,
+    fix:
+      provider !== undefined && t3.settings !== null
+        ? undefined
+        : t3.settings === null
+          ? `${t3.file} is not valid JSON`
+          : undefined,
   });
 
   return checks;

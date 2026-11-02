@@ -47,6 +47,7 @@ const BOOLEAN_FLAGS = Object.freeze({
   '--json': 'json',
   '--apply': 'apply',
   '--force': 'force',
+  '--dry-run': 'dryRun',
 });
 
 /** Exit code for a usage error (unknown flag, missing argument, bad command). */
@@ -136,6 +137,14 @@ export const COMMANDS = Object.freeze([
     name: 'doctor',
     summary: 'Check runtime, profile, credentials and plugins in one pass',
     kind: 'info',
+  }),
+  Object.freeze({
+    name: 't3',
+    summary: 'Use DSH as a T3 Code provider over ACP (status, register, unregister)',
+    usage: '[status|register|unregister]',
+    kind: 'info',
+    positional: true,
+    optional: true,
   }),
 ]);
 
