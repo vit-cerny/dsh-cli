@@ -306,6 +306,34 @@ function scrollHint({ above, below, theme, budget }) {
   return theme.style.muted(truncateToWidth(text, budget, theme.glyph.ellipsis));
 }
 
+/** Tab labels shown in the top bar, one per entry point. */
+export const TOOLBAR_TABS = Object.freeze(['sessions', 'project', 'plugins', 'skills', 'model']);
+
+/**
+ * Render the top tab bar: active tab in brackets plus the slash-command hint.
+ *
+ * The brackets carry the active state on their own, so the row still reads on a
+ * terminal without colour, in a screenshot, and in a screen-reader transcript.
+ *
+ * @param {object} [options] Options.
+ * @param {number} [options.width] Column budget.
+ * @param {number} [options.active] Active tab index.
+ * @param {object} [options.theme] Theme from `createTheme`.
+ * @returns {string} Styled row, width-clipped, no trailing newline.
+ */
+export function renderTabBar({ width = DEFAULT_WIDTH, active = 0, theme = DEFAULT_THEME } = {}) {
+  const budget = clampWidth(width);
+  const index = Number.isInteger(active) && active >= 0 && active < TOOLBAR_TABS.length ? active : 0;
+  const label = TOOLBAR_TABS.map((name, position) => {
+    const text = position === index ? `[${name}]` : ` ${name} `;
+    return position === index ? theme.style.selected(text) : theme.style.muted(text);
+  }).join(theme.style.muted('│'));
+  // The hint is the first thing to go when columns are scarce: the tabs are
+  // navigation, the hint only advertises it.
+  const hint = budget >= 72 ? theme.style.muted('  /help') : '';
+  return truncateToWidth(`${label}${hint}`, budget);
+}
+
 /**
  * Render the session list the toolbar opens.
  *

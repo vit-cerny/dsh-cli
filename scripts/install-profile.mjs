@@ -48,6 +48,16 @@ export const COPIED_ROWS = Object.freeze([
   'llm-pi-ai',
   'llm-deepseek',
   'web-deepseek-api',
+  // Token-economy rows (see https://github.com/vit-cerny/dsh-token-saver).
+  // These bundles mount the tools on the host plane, so copying the rows is
+  // enough here; the `web` profile needs its preset restated instead.
+  'spill-policy',
+  'repeat-tool-reminder',
+  'session-title-llm',
+  'harness-dev-context',
+  'tool-subagent',
+  'tool-subagent-fork',
+  'tool-workflow',
 ]);
 
 /** Bundles the CLI profile mounts: the shared core plus the JSON-RPC server. */

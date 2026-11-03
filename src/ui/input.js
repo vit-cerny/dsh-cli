@@ -13,7 +13,6 @@
  */
 
 import process from 'node:process';
-import readline from 'node:readline';
 import { ERASE_DOWN, cursor } from './ansi.js';
 import { KeyDecoder } from './keymap.js';
 import { displayWidth, truncateToWidth } from './text.js';
@@ -92,13 +91,22 @@ export class InputController {
    * @param {NodeJS.WriteStream} [options.stdout] Output stream.
    * @param {(action: string, payload?: any) => void} options.onAction Action sink.
    * @param {() => { columns: number, promptHint?: string }} [options.hints] Layout hints.
+   * @param {() => string[]} [options.header] Rows pinned above the prompt.
    */
-  constructor({ editor, stdin = process.stdin, stdout = process.stdout, onAction, hints }) {
+  constructor({ editor, stdin = process.stdin, stdout = process.stdout, onAction, hints, header }) {
     this.editor = editor;
     this.stdin = stdin;
     this.stdout = stdout;
     this.onAction = onAction;
     this.hints = hints ?? (() => ({ columns: 80 }));
+    /**
+     * Rows pinned above the prompt, redrawn with it.
+     *
+     * The tab bar lives here rather than being repainted by seeking to row 1:
+     * the prompt block is the only thing that knows how many rows it owns above
+     * the caret, so it is the only place a redraw can run safely.
+     */
+    this.header = header ?? (() => []);
     this.decoder = new KeyDecoder();
     this.drawnRows = 0;
     this.started = false;
@@ -120,7 +128,9 @@ export class InputController {
       this.stdin.setRawMode(true);
     }
     this.stdin.resume?.();
-    readline.emitKeypressEvents(this.stdin);
+    // No `readline.emitKeypressEvents` here: it installs a competing `data`
+    // listener that consumes keypresses, so Enter reached readline's parser and
+    // never arrived at `_onData`. The KeyDecoder already handles raw bytes.
     this.stdin.on('data', this._onData);
     if (typeof this.stdout.on === 'function') this.stdout.on('resize', this._onResize);
     this.render();
@@ -189,7 +199,20 @@ export class InputController {
     if (!this.interactive) return;
     const { columns } = this.hints();
     const plan = promptLines(this.editor.snapshot(), { columns });
-    const rows = plan.rows.slice();
+    // Header rows come first so they scroll away with the block rather than
+    // being pinned by absolute addressing.
+    // Header rows are padded to the full width by the toolbar, so trimming has
+    // to happen before clipping. The budget leaves one column spare because
+    // `truncateToWidth` spends a column on its ellipsis: a row that still filled
+    // the line would wrap on the newline and leave one stray character behind.
+    const budget = Math.max(1, columns - 2);
+    const headerRows = this.header().map((row) => {
+      const plain = String(row ?? '').trimEnd();
+      return plain === '' ? '' : truncateToWidth(plain, budget);
+    });
+    const rows = [...headerRows, ...plan.rows];
+    // `plan.caretRow` counts from the first prompt row; shift it past the header.
+    const caretRow = plan.caretRow + headerRows.length;
 
     let out = '';
     if (this.drawnRows > 0) {
@@ -206,7 +229,7 @@ export class InputController {
     // The writes above leave the caret on the line *below* the block, so the
     // distance back to the caret row equals the block height minus the row.
     this.drawnRows = rows.length + hintRows.length;
-    const back = this.drawnRows - plan.caretRow;
+    const back = this.drawnRows - caretRow;
     if (back > 0) out += cursor.up(back);
     out += cursor.column(plan.caretCol + 1);
     this.stdout.write(out);

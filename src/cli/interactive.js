@@ -256,6 +256,30 @@ export async function runInteractive(context, options = {}) {
         usageMeter,
         resources: sampler,
         listModels: () => availableModels(context),
+        // The picker searches the whole catalogue; `/model` prints a short list
+        // because a wall of 400 rows is not a useful answer.
+        listAllModels: () => availableModels(context, 1000),
+        listSessions: () =>
+          readSessionSummaries(context.dshHome, { limit: 200 }).map((row) => ({
+            id: row.id,
+            label: row.title,
+            detail: row.cwd ?? '',
+            active: row.id === driver.sessionId,
+          })),
+        onResumeSession: async (id) => {
+          // Reopening replaces the runtime: the live process holds this
+          // session's write lock, so the current one has to go first.
+          const previous = driver;
+          await previous.close();
+          const fresh = await factory(driverOptions(context, id));
+          await fresh.client.resume(id);
+          app.unsubscribe();
+          app.driver = fresh;
+          driver = fresh;
+          app.unsubscribe = subscribeDriver(fresh, (event) => app.onEvent(event));
+          app.renderer.setMeta({ sessionId: fresh.sessionId });
+          app.renderer.block(`resumed ${id}`, { style: 'muted' });
+        },
         setModel: async (name) => {
           const next = parseModelSwitch(context, name);
           // The SDK protocol has no re-route method, and the live runtime holds
@@ -283,6 +307,9 @@ export async function runInteractive(context, options = {}) {
           };
           app.unsubscribe = subscribeDriver(fresh, (event) => app.onEvent(event));
           app.renderer.setMeta({ model: next.model, sessionId: fresh.sessionId });
+          // The header shows the route, and a runtime swap takes seconds: paint
+          // the new model into the block so the switch is visible immediately.
+          app.input?.render?.();
         },
       },
       extraCommands: [

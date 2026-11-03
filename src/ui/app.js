@@ -20,7 +20,7 @@
 
 import process from 'node:process';
 import readline from 'node:readline';
-import { clearLineSequence, CLEAR_SCREEN } from './ansi.js';
+import { clearLineSequence, CLEAR_SCREEN, cursor } from './ansi.js';
 import { createCommandRegistry } from './commands.js';
 import { Editor } from './editor.js';
 import { InputController } from './input.js';
@@ -29,7 +29,8 @@ import { Renderer } from './renderer.js';
 import { formatBytes } from '../session/resources.js';
 import { formatCost } from '../session/usage.js';
 import { createTheme } from './theme.js';
-import { Toolbar } from './toolbar.js';
+import { PickerHost, renderModelPicker, renderPicker } from './model-picker.js';
+import { TOOLBAR_TABS, Toolbar, renderTabBar } from './toolbar.js';
 
 /**
  * Normalize the two subscription shapes the driver contract allows into one
@@ -134,11 +135,38 @@ export class App {
     /** @type {Promise<void> | null} Settles when the submitted turn finishes. */
     this.currentTurn = null;
 
+    /**
+     * Searchable model and session pickers. One host so `Tab`, `Enter`, `Esc`
+     * and typing mean the same thing whichever list is open.
+     */
+    this.pickers = new PickerHost({
+      listModels: () => {
+        try {
+          return meta.listAllModels?.() ?? meta.listModels?.() ?? [];
+        } catch {
+          return [];
+        }
+      },
+      currentModel: () => `${this.renderer.meta.provider ?? ''}/${this.renderer.meta.model ?? ''}`,
+      onModel: (id) => {
+        if (typeof meta.setModel === 'function') void meta.setModel(id);
+        else this.renderer.block(`switch with: /model ${id}`, { style: 'muted' });
+        this.repaintPicker();
+      },
+      listSessions: meta.listSessions ?? (() => []),
+      onSession: (id) => {
+        if (typeof meta.onResumeSession === 'function') void meta.onResumeSession(id);
+        else this.renderer.block(`resume with: dsh-cli resume ${id}`, { style: 'muted' });
+      },
+    });
+
     this.commands = createCommandRegistry({
       model: () => this.renderer.meta.model || '(unknown)',
       cwd: () => this.renderer.meta.cwd || process.cwd(),
       setModel: meta.setModel,
       listModels: meta.listModels,
+      openModelPicker: () => this.openPicker('model'),
+      openSessionPicker: () => this.openPicker('session'),
       clear: () => {
         this.stdout.write(CLEAR_SCREEN);
         if (this.input) this.input.drawnRows = 0;
@@ -169,13 +197,11 @@ export class App {
    * @returns {Promise<{ exitCode: number }>} Resolves when the app quits.
    */
   async run() {
-    this.renderer.banner({
-      version: this.version,
-      model: this.renderer.meta.model,
-      cwd: this.renderer.meta.cwd,
-      sessionId: this.renderer.meta.sessionId,
-    });
-    this.paintToolbar();
+    // Header, opencode style: one tab bar, then one status line, both drawn by
+    // the prompt block so they stay pinned to the bottom while the transcript
+    // scrolls above them. The old three-line banner pushed the conversation
+    // down and buried the tabs.
+    if (!this.interactive) this.paintToolbar();
     this.resources?.start?.();
 
     this.unsubscribe = subscribeDriver(this.driver, (event) => this.onEvent(event));
@@ -187,6 +213,19 @@ export class App {
         stdout: this.stdout,
         onAction: (key, payload) => this.onKey(key, payload),
         hints: () => ({ columns: this.renderer.columns }),
+        // Both pinned rows are produced by the prompt block, so they redraw
+        // together and in a fixed order: status line, then tabs, then prompt.
+        header: () => {
+          const status = this.toolbar.render(this.toolbarModel());
+          return [
+            status === '' ? '' : status,
+            renderTabBar({
+              width: this.renderer.columns,
+              active: this.toolbarTab ?? 0,
+              theme: this.theme,
+            }),
+          ];
+        },
       });
       this.input.start();
       this.refreshHint();
@@ -203,6 +242,51 @@ export class App {
     }
 
     return this.done;
+  }
+
+  /**
+   * Move the tab bar highlight and redraw that one row.
+   *
+   * The tab bar is the first row of the terminal, so it is repainted with an
+   * absolute move instead of a full redraw: a full redraw would push the
+   * conversation down the screen on every Tab press.
+   *
+   * @param {number} delta Tabs to move, wrapping at both ends.
+   * @returns {void}
+   */
+  moveTab(delta) {
+    const count = TOOLBAR_TABS.length;
+    const next = (((this.toolbarTab ?? 0) + delta) % count + count) % count;
+    this.toolbarTab = next;
+    // Tab puts the keyboard on the bar, which is what lets the next Enter open
+    // that tab instead of submitting the (empty) prompt.
+    this.toolbarFocused = true;    if (!this.interactive) return;
+    // The bar is redrawn as part of the prompt block rather than by seeking to
+    // row 1: in a scrollback UI the block owns the rows above the caret, and
+    // jumping to the top rewinds it from the wrong line.
+    if (this.input) this.input.render();
+  }
+
+  /**
+   * Run the command a tab stands for.
+   *
+   * @param {number} index Tab index.
+   * @returns {void}
+   */
+  openTab(index) {
+    // The sessions and model tabs open their pickers; the rest run their
+    // command, so a tab and the slash command can never disagree.
+    if (index === 0) {
+      this.openPicker('session');
+      return;
+    }
+    if (index === 4) {
+      this.openPicker('model');
+      return;
+    }
+    const command = ['/sessions', '/cwd', '/plugins', '/skills', '/model'][index];
+    if (command === undefined) return;
+    void this.submit(command);
   }
 
   /**
@@ -316,15 +400,13 @@ export class App {
       }
     }
     this.renderer.handle(event);
-    if (event.kind === 'turn-end') {
-      this.renderer.ensureNewline();
-      this.renderer.block(this.renderer.statusLine(), { style: 'plain' });
-      this.paintToolbar();
-    }
+    if (event.kind === 'turn-end') this.renderer.ensureNewline();
+    // The status line and tab bar are owned by the prompt block, which redraws
+    // them on every render. Printing them here too stacked duplicate header
+    // rows into the transcript on each turn.
     if (wasBusy !== this.renderer.busy && this.input) {
       this.input.drawnRows = 0;
       this.input.render();
-      this.paintToolbar();
     }
   }
 
@@ -337,10 +419,15 @@ export class App {
    * @param {string} [payload] Text payload for `text`/`paste`.
    */
   onKey(key, payload) {
+    // A picker owns the keyboard while it is open, or a keystroke would edit the
+    // prompt hidden behind the list.
+    if (this.handlePickerKey?.(key, payload)) return;
     const suggestionOpen = this.suggestions.length > 0;
     const action = actionForKey(key, {
       busy: this.renderer.busy,
       suggestionOpen,
+      emptyPrompt: this.editor.isEmpty,
+      toolbarFocused: this.toolbarFocused === true,
       atFirstLine: this.editor.state.row === 0,
       atLastLine: this.editor.state.row === this.editor.state.lines.length - 1,
     });
@@ -355,6 +442,19 @@ export class App {
    */
   act(action, { payload } = {}) {
     switch (action) {
+      case 'submit':
+        // Enter is the only way to send a prompt. Repaint on both edges: the
+        // first clears the box the user just sent from, the second shows what
+        // the turn produced.
+        void this.submit()
+          .catch((error) => {
+            this.renderer.systemMessage(`submit failed: ${error?.message ?? error}`, { tone: 'error' });
+          })
+          .finally(() => {
+            this.refreshHint();
+            this.input?.render();
+          });
+        return;
       case 'insert':
       case 'paste':
         this.editor.insert(payload ?? '');
@@ -421,6 +521,26 @@ export class App {
         this.stdout.write(CLEAR_SCREEN);
         if (this.input) this.input.drawnRows = 0;
         break;
+      case 'toolbar-next':
+        // The first Tab only focuses the bar, keeping the current tab; later
+        // presses move along it. Advancing on the focusing press meant
+        // "Tab, Enter" opened the next tab instead of the one shown active.
+        if (this.toolbarFocused === true) this.moveTab(1);
+        else {
+          this.toolbarFocused = true;
+          if (this.input) this.input.render();
+        }
+        break;
+      case 'toolbar-prev':
+        if (this.toolbarFocused === true) this.moveTab(-1);
+        else {
+          this.toolbarFocused = true;
+          if (this.input) this.input.render();
+        }
+        break;
+      case 'toolbar-open':
+        this.openTab(this.toolbarTab ?? 0);
+        break;
       case 'abort':
         this.abort();
         break;
@@ -447,6 +567,59 @@ export class App {
     this.suggestionIndex = -1;
   }
 
+  /**
+   * Open a searchable picker under the prompt.
+   *
+   * @param {'model'|'session'} kind Which list.
+   * @returns {void}
+   */
+  openPicker(kind) {
+    if (kind === 'model') this.pickers.openModel();
+    else this.pickers.openSession();
+    this.editor.clear();
+    this.suggestions = [];
+    this.suggestionIndex = -1;
+    this.repaintPicker();
+  }
+
+  /**
+   * Route a key to the open picker.
+   *
+   * @param {string} key Decoded key name.
+   * @param {string} [payload] Text payload.
+   * @returns {boolean} True when a picker consumed the key.
+   */
+  handlePickerKey(key, payload) {
+    if (!this.pickers?.open) return false;
+    const consumed = this.pickers.handleKey(
+      key,
+      payload,
+      KEYS.enter,
+      KEYS.tab,
+      KEYS.backspace,
+      KEYS.escape,
+      KEYS.ctrlC,
+      KEYS.text,
+    );
+    if (consumed) this.repaintPicker();
+    return consumed;
+  }
+
+  /** Show the open picker's rows, or clear the hint line. */
+  repaintPicker() {
+    if (!this.input) return;
+    const pickers = this.pickers;
+    const rows = pickers?.model
+      ? renderModelPicker(pickers.model, { width: this.renderer.columns, theme: this.theme })
+      : pickers?.session
+        ? renderPicker(pickers.session, { width: this.renderer.columns, theme: this.theme })
+        : [];
+    this.input.setHint(rows.join('\n'));
+    // No `drawnRows` reset here: the block knows where its caret is, and
+    // zeroing that made the next render paint a second header above the first.
+    this.input.render();
+  }
+
   /** Move the suggestion highlight. */
   moveSuggestion(delta) {
     if (this.suggestions.length === 0) return;
@@ -460,6 +633,12 @@ export class App {
    * @returns {void}
    */
   refreshHint() {
+    // A picker owns the hint rows. Letting completion text overwrite them made
+    // the picker flash and disappear the moment any key refreshed the hint.
+    if (this.pickers?.open) {
+      this.repaintPicker();
+      return;
+    }
     const text = this.editor.text;
     const singleLine = !text.includes('\n');
     const isCommand = singleLine && text.startsWith('/');
@@ -506,11 +685,17 @@ export class App {
     this.editor.clear();
     this.suggestions = [];
     this.suggestionIndex = -1;
+    // Erase the block *before* anything is printed. Rendering it empty leaves
+    // the header and prompt occupying rows, so the echoed message and the reply
+    // were written underneath a live prompt and never appeared in order.
     if (this.input) {
+      this.input.erase();
       this.input.setHint('');
-      this.input.render();
     }
-    if (!value.trim()) return;
+    if (!value.trim()) {
+      if (this.input) this.input.render();
+      return;
+    }
 
     this.editor.commitHistory(value);
 

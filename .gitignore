@@ -66,3 +66,9 @@ desktop.ini
 # whatever toolchain the user already has.
 .tools/
 rust/target/
+
+# ---- local tool fork / config backups (may hold credentials) ----
+_orig/
+*.zip
+dsh-audit.ps1
+token-audit.ps1

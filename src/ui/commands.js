@@ -212,6 +212,12 @@ export function createCommandRegistry(hooks = {}) {
     run(ctx, args) {
       const current = hooks.model?.() ?? ctx.model ?? '(unknown)';
       if (!args) {
+        // Bare `/model` opens the searchable picker: printing hundreds of ids
+        // is not a useful answer, and the picker filters as you type.
+        if (typeof hooks.openModelPicker === 'function') {
+          hooks.openModelPicker();
+          return { action: 'continue' };
+        }
         ctx.renderer?.block(`model: ${current}`);
         // Listing what is available is the difference between "you are here"
         // and "you can go there"; without it the user needs a second terminal.

@@ -139,20 +139,18 @@ Exit codes: `0` success, `1` failure, `2` usage error, `130` interrupted.
 
 ## The interactive UI
 
-A full-screen layout on the alternate screen, in the shape opencode uses:
+A Claude Code / opencode shape: the tab bar and status line pinned at the top, the conversation scrolling underneath them in normal scrollback, and a bare prompt at the bottom. Nothing is drawn in a box and there is no alternate screen, so the transcript stays in the terminal when you quit.
 
 ```
+[dsh-cli-abc…] · deepseek-v4.1-flash-1017 · 3.1k tok · $0.0009 · ○ idle
+[sessions]│ project │ plugins │ skills │ model   /help
 ❯ why does the build fail
-● pwsh({"command":"npm run build","workdir":"."})  ✓ 1.2s
+⠋ pwsh({"command":"npm run build","workdir":"."}) …
   src/index.ts(12,4): error TS2304: Cannot find name 'foo'.
-
-╭──────────────────────────────────────────────────────────────╮
-│ ❯ fix that                                                   │
-╰──────────────────────────────────────────────────────────────╯
-idle · logfare/deepseek-v4.1-flash · 12.4k tok · $0.0031 · ~/proj
+❯ fix that
 ```
 
-The transcript scrolls in a fixed viewport; the input box is a rounded border that grows with the prompt (up to the available height); the status bar is pinned to the last row. A tool call appears once and its glyph flips from `○` running to `● ✓ done` when the result arrives, rather than printing a second card.
+A tool call appears once and its glyph flips from `○` running to `● ✓ done` when the result arrives, rather than printing a second card. Keys: `↑↓` history, `Ctrl+J` newline, `/` commands, `Tab` completes commands and cycles the tab bar, `Ctrl+C` cancels the turn (never quits), `Ctrl+D` exits. Type `/model` for the searchable picker over all 400 models; `Tab` there stars a favourite that sorts to the top next time.
 
 The status bar is ordered by priority, and narrow terminals drop segments from the end instead of clipping the row. State (`idle` / `working…` / `interrupted`) always survives, because it is the one thing the bar exists to say; the working directory is the first to go.
 
@@ -276,7 +274,7 @@ On an unrestricted machine plain `node --test` works. Inside a sandbox that bloc
 
 The interactive UI cannot be tested through a pipe. `App` checks `stdin.isTTY && stdout.isTTY` and takes a different code path in line mode, so a piped test passes while the real screen is broken. Every bug this project shipped — the cursor arithmetic that erased the transcript on each keystroke, Enter never submitting, Ctrl+D hanging, a resize blanking the frame — was invisible to piped tests and obvious in a terminal.
 
-`npm run test:gui` therefore allocates a Windows pseudo-terminal (`node-pty`), replays the byte stream into `@xterm/headless`, and asserts on the rendered cell grid: the input box is a closed rectangle, the status bar stays on the last row, the prompt glyph never smears, Enter clears the box, Tab accepts a completion (and cycles the header tabs when no menu is open), a tab's command output actually reaches the screen, a narrow terminal keeps its state marker, and Ctrl+D exits with code 0.
+`npm run test:gui` therefore allocates a Windows pseudo-terminal (`node-pty`), replays the byte stream into `@xterm/headless`, and asserts on the rendered cell grid: the status bar and tab bar stay above the prompt, the prompt glyph never smears, Enter sends, Tab cycles the tab bar, a tab's command output actually reaches the screen, a narrow terminal keeps its state marker, and Ctrl+D exits with code 0.
 
 Both packages ship with DSH Desktop, so this adds no dependency to the CLI. The cases are skipped by default because each launches the application and its child runtime (about a minute for all nine); `DSH_CLI_GUI=1` enables them, which `npm run test:gui` sets for you.
 
