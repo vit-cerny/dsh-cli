@@ -72,3 +72,6 @@ _orig/
 *.zip
 dsh-audit.ps1
 token-audit.ps1
+
+# ---- local measurement scratch ----
+dsh-live-measure.mjs

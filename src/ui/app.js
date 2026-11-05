@@ -134,6 +134,8 @@ export class App {
     this.pendingTurn = null;
     /** @type {Promise<void> | null} Settles when the submitted turn finishes. */
     this.currentTurn = null;
+    /** Driver hooks; kept so palette actions can reach them after construction. */
+    this.meta = meta;
 
     /**
      * Searchable model and session pickers. One host so `Tab`, `Enter`, `Esc`
@@ -158,6 +160,7 @@ export class App {
         if (typeof meta.onResumeSession === 'function') void meta.onResumeSession(id);
         else this.renderer.block(`resume with: dsh-cli resume ${id}`, { style: 'muted' });
       },
+      onPalette: (choice) => this.applyPalette(choice),
     });
 
     this.commands = createCommandRegistry({
@@ -451,7 +454,9 @@ export class App {
             this.renderer.systemMessage(`submit failed: ${error?.message ?? error}`, { tone: 'error' });
           })
           .finally(() => {
-            this.refreshHint();
+            // No `refreshHint()` here: the prompt was just submitted, so
+            // re-deriving a completion menu would repaint the block over the
+            // output the command or turn produced.
             this.input?.render();
           });
         return;
@@ -521,6 +526,9 @@ export class App {
         this.stdout.write(CLEAR_SCREEN);
         if (this.input) this.input.drawnRows = 0;
         break;
+      case 'open-palette':
+        this.openPalette();
+        break;
       case 'toolbar-next':
         // The first Tab only focuses the bar, keeping the current tab; later
         // presses move along it. Advancing on the focusing press meant
@@ -568,18 +576,90 @@ export class App {
   }
 
   /**
+   * Open the everything-picker: commands, models and sessions in one list.
+   *
+   * @returns {void}
+   */
+  openPalette() {
+    /** @type {{ id: string, label: string, detail?: string }[]} */
+    const rows = [];
+    for (const spec of this.commands.list()) {
+      rows.push({ id: `cmd:${spec.name}`, label: spec.name, detail: spec.summary });
+    }
+    try {
+      for (const route of meta.listAllModels?.() ?? meta.listModels?.() ?? []) {
+        rows.push({ id: `model:${route}`, label: route, detail: 'switch model' });
+      }
+    } catch {
+      /* a broken catalogue must not break the palette */
+    }
+    try {
+      for (const session of meta.listSessions?.() ?? []) {
+        rows.push({ id: `session:${session.id}`, label: session.label, detail: session.detail });
+      }
+    } catch {
+      /* same for the session store */
+    }
+    this.pickers.openPalette(rows);
+    this.editor.clear();
+    this.suggestions = [];
+    this.suggestionIndex = -1;
+    this.repaintPicker();
+  }
+
+  /**
+   * Act on a palette choice.
+   *
+   * @param {{ kind: string, value: string } | null} choice Chosen row.
+   * @returns {void}
+   */
+  applyPalette(choice) {
+    if (choice === null) {
+      this.repaintPicker();
+      return;
+    }
+    if (choice.kind === 'cmd') {
+      // `submit` erases the block, dispatches, and writes the command's output.
+      // The block is redrawn afterwards so the prompt returns below that output
+      // instead of being painted over it.
+      void this.submit(`/${choice.value}`)
+        .catch((error) => {
+          this.renderer.systemMessage(`command failed: ${error?.message ?? error}`, { tone: 'error' });
+        })
+        .finally(() => this.input?.render());
+      return;
+    }
+    if (choice.kind === 'model') {
+      // An unknown route must not crash the UI: report it and keep the session.
+      if (typeof this.meta?.setModel !== 'function' || choice.value === '') return;
+      void Promise.resolve(this.meta.setModel(choice.value)).catch((error) => {
+        this.renderer.systemMessage(`model switch failed: ${error?.message ?? error}`, { tone: 'error' });
+        this.repaintPicker();
+      });
+      return;
+    }
+    if (choice.kind === 'session' && typeof this.meta?.onResumeSession === 'function') {
+      void this.meta.onResumeSession(choice.value);
+    }
+  }
+
+  /**
    * Open a searchable picker under the prompt.
    *
    * @param {'model'|'session'} kind Which list.
    * @returns {void}
    */
   openPicker(kind) {
+    // Runs from a dispatch, which may itself be mid-close after a palette
+    // choice. Defer the repaint to the next tick so the picker state changes
+    // settle before the block is redrawn, instead of recursing into a render
+    // that never returns.
     if (kind === 'model') this.pickers.openModel();
     else this.pickers.openSession();
     this.editor.clear();
     this.suggestions = [];
     this.suggestionIndex = -1;
-    this.repaintPicker();
+    setImmediate(() => this.repaintPicker());
   }
 
   /**
@@ -601,7 +681,17 @@ export class App {
       KEYS.ctrlC,
       KEYS.text,
     );
-    if (consumed) this.repaintPicker();
+    if (consumed) {
+      // Enter closes the picker, so the hint rows must be cleared even though
+      // there is no list left to draw: leaving them set left the closed menu
+      // painted under the prompt.
+      if (!this.pickers.open) {
+        this.input?.setHint('');
+        this.input?.render();
+      } else {
+        this.repaintPicker();
+      }
+    }
     return consumed;
   }
 
@@ -611,12 +701,15 @@ export class App {
     const pickers = this.pickers;
     const rows = pickers?.model
       ? renderModelPicker(pickers.model, { width: this.renderer.columns, theme: this.theme })
-      : pickers?.session
-        ? renderPicker(pickers.session, { width: this.renderer.columns, theme: this.theme })
-        : [];
+      : pickers?.palette
+        ? renderPicker(pickers.palette, { width: this.renderer.columns, theme: this.theme })
+        : pickers?.session
+          ? renderPicker(pickers.session, { width: this.renderer.columns, theme: this.theme })
+          : [];
     this.input.setHint(rows.join('\n'));
-    // No `drawnRows` reset here: the block knows where its caret is, and
-    // zeroing that made the next render paint a second header above the first.
+    // With no picker open the block was already erased and the output written:
+    // rendering here would repaint the prompt over that output.
+    if (rows.length === 0 && !pickers?.open) return;
     this.input.render();
   }
 

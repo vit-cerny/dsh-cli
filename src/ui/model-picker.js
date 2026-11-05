@@ -316,15 +316,47 @@ export class PickerHost {
     this.listSessions = options.listSessions;
     this.onSession = options.onSession;
     this.favouritesFile = options.favouritesFile;
+    /** Called with the palette choice, `{ kind, value }`. */
+    this.onPalette = options.onPalette;
     /** @type {ModelPicker | null} */
     this.model = null;
     /** @type {ListPicker | null} */
     this.session = null;
+    /** @type {ListPicker | null} */
+    this.palette = null;
   }
 
   /** Whether any picker is open. */
   get open() {
-    return this.model !== null || this.session !== null;
+    return this.model !== null || this.session !== null || this.palette !== null;
+  }
+
+  /**
+   * Open the everything-picker: commands, models and sessions in one list.
+   *
+   * @param {{ id: string, label: string, detail?: string }[]} rows Entries whose ids start `cmd:`, `model:` or `session:`.
+   * @returns {void}
+   */
+  openPalette(rows) {
+    this.palette = new ListPicker({ kind: 'palette', rows });
+    this.model = null;
+    this.session = null;
+  }
+
+  /**
+   * Act on the palette's highlighted row, dispatching on its id prefix.
+   *
+   * @returns {{ kind: string, value: string } | null} What was chosen.
+   */
+  acceptPalette() {
+    const row = this.palette?.current ?? null;
+    this.palette = null;
+    if (row === null) return null;
+    // ids are `kind:value`, so the first segment is the kind and the rest is
+    // the value (a model id or session id may itself contain no colon, but a
+    // provider quirk could, so the remainder is rejoined).
+    const [kind, ...rest] = row.id.split(':');
+    return { kind, value: rest.join(':') };
   }
 
   /** Whether the model picker specifically is open. */
@@ -336,6 +368,7 @@ export class PickerHost {
   close() {
     this.model = null;
     this.session = null;
+    this.palette = null;
   }
 
   /** Open the model picker on the full catalogue. */
@@ -379,6 +412,22 @@ export class PickerHost {
    * @returns {boolean} True when a picker consumed the key.
    */
   handleKey(key, payload, enterKey, tabKey, backspaceKey, escapeKey, ctrlCKey, textKey) {
+    if (this.palette !== null) {
+      if (key === 'up') { this.palette.move(-1); return true; }
+      if (key === 'down') { this.palette.move(1); return true; }
+      if (key === enterKey) {
+        // Read the choice, then act on the next tick. Acting inline re-entered
+        // the palette's own key handler through the command it dispatched, and
+        // that cycle never returned.
+        const choice = this.acceptPalette();
+        setImmediate(() => this.onPalette?.(choice));
+        return true;
+      }
+      if (key === backspaceKey) { this.palette.searchBackspace(); return true; }
+      if (key === escapeKey || key === ctrlCKey) { this.close(); return true; }
+      if (key === textKey) { this.palette.search(payload ?? ''); return true; }
+      return false;
+    }
     if (this.model !== null) {
       if (key === 'up') { this.model.move(-1); return true; }
       if (key === 'down') { this.model.move(1); return true; }
@@ -571,9 +620,13 @@ function saveFavouritesFor(kind, ids, file) {
 export function renderPicker(picker, { width = 80, height = MODEL_PICKER_ROWS, theme } = {}) {
   const { style } = theme ?? { style: { muted: (t) => t, selected: (t) => t } };
   const rows = picker.rows;
+  // The heading names what the list holds: the palette mixes commands, models
+  // and sessions, so calling it "sessions" would misdescribe it.
+  const title = picker.kind === 'palette' ? 'commands · models · sessions' : 'sessions';
+  const action = picker.kind === 'palette' ? 'Enter run' : 'Enter resume';
   const heading = picker.query === ''
-    ? 'sessions  type to filter · Enter resume · Tab favourite · Esc cancel'
-    : `sessions  filter: ${picker.query}`;
+    ? `${title}  type to filter · ${action} · Tab favourite · Esc cancel`
+    : `${title}  filter: ${picker.query}`;
   const lines = [style.muted(truncateToWidth(heading, width))];
 
   if (rows.length === 0) {
@@ -593,8 +646,10 @@ export function renderPicker(picker, { width = 80, height = MODEL_PICKER_ROWS, t
     const label = truncateToWidth(row.label, labelWidth).padEnd(labelWidth);
     const detailWidth = Math.max(0, width - labelWidth - 6);
     const detail = row.detail === undefined ? '' : truncateToWidth(row.detail, detailWidth);
-    const text = `${star}${mark} ${label} ${detail}`;
-    lines.push(start + offset === picker.index ? style.selected(text) : `  ${text}`);
+    // Two leading spaces keep unselected rows aligned with the selected one,
+    // whose prefix is the star and active marks.
+    const text = `  ${star}${mark} ${label} ${detail}`;
+    lines.push(start + offset === picker.index ? style.selected(text) : text);
   }
 
   const above = start;

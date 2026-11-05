@@ -294,10 +294,14 @@ export function actionForKey(key, ctx = {}) {
     case KEYS.ctrlJ:
       return 'newline';
     case KEYS.tab:
-      // Tab accepts a highlighted command first; with no menu open it moves the
-      // toolbar, which is the only way to reach the tabs without remembering a
-      // slash command.
-      return ctx.suggestionOpen ? 'accept-suggestion' : 'toolbar-next';
+      // Tab accepts a highlighted command first. On an empty prompt it opens the
+      // one searchable picker over everything (commands, models, sessions);
+      // once the toolbar has the keyboard it moves along the tabs instead.
+      return ctx.suggestionOpen
+        ? 'accept-suggestion'
+        : ctx.emptyPrompt && !ctx.toolbarFocused
+          ? 'open-palette'
+          : 'toolbar-next';
     case KEYS.up:
       if (ctx.suggestionOpen) return 'suggestion-prev';
       return ctx.atFirstLine ? 'history-prev' : 'caret-up';
