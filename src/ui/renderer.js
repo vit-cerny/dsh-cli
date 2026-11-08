@@ -128,10 +128,13 @@ export class Renderer {
     this.foldLines = Math.max(1, Math.trunc(foldLines) || FOLD_LINES);
     this.indent = Math.max(0, Math.trunc(indent));
     this.fixedColumns = Number.isFinite(columns) ? columns : null;
+    // Thinking is shown by default: watching the agent reason is how you tell
+    // a slow turn from a stuck one. `DSH_CLI_REASONING=0` hides it again for
+    // anyone who wants a quiet transcript.
     this.showReasoning =
       typeof showReasoning === 'boolean'
         ? showReasoning
-        : env.DSH_CLI_REASONING === '1' || env.DSH_CLI_REASONING === 'true';
+        : !(env.DSH_CLI_REASONING === '0' || env.DSH_CLI_REASONING === 'false');
     /** Echo the runtime's system prompt (off by default; it is not chat). */
     this.showSystem = env.DSH_CLI_SHOW_SYSTEM === '1' || env.DSH_CLI_SHOW_SYSTEM === 'true';
 

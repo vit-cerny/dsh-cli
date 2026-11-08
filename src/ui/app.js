@@ -23,6 +23,7 @@ import readline from 'node:readline';
 import { clearLineSequence, CLEAR_SCREEN, cursor } from './ansi.js';
 import { createCommandRegistry } from './commands.js';
 import { Editor } from './editor.js';
+import { FullScreenView, TranscriptSink } from './fullscreen.js';
 import { InputController } from './input.js';
 import { actionForKey, KEYS } from './keymap.js';
 import { Renderer } from './renderer.js';
@@ -215,35 +216,34 @@ export class App {
     this.unsubscribe = subscribeDriver(this.driver, (event) => this.onEvent(event));
 
     if (this.interactive) {
+      // Fixed frame: toolbar pinned at the top, transcript scrolling between,
+      // prompt and status pinned at the bottom. The renderer writes into the
+      // frame's transcript sink instead of straight to the terminal.
+      const sink = new TranscriptSink({ columns: this.renderer.columns });
+      this.view = new FullScreenView({
+        stdout: this.stdout,
+        sink,
+        theme: this.theme,
+        columns: () => this.renderer.columns,
+        rows: () => Number(this.stdout.rows) || 24,
+      });
+      this.renderer.stdout = sink;
+      this.view.start();
       this.input = new InputController({
         editor: this.editor,
         stdin: this.stdin,
         stdout: this.stdout,
         onAction: (key, payload) => this.onKey(key, payload),
         hints: () => ({ columns: this.renderer.columns }),
-        // Both pinned rows are produced by the prompt block, so they redraw
-        // together and in a fixed order: status line, then tabs, then prompt.
-        header: () => {
-          const status = this.toolbar.render(this.toolbarModel());
-          return [
-            status === '' ? '' : status,
-            renderTabBar({
-              width: this.renderer.columns,
-              active: this.toolbarTab ?? 0,
-              theme: this.theme,
-            }),
-          ];
-        },
+        // The frame paints; the controller only decodes keys.
+        detached: true,
       });
       this.input.start();
       this.refreshHint();
+      this.repaint();
       this.unwatchResize = this.renderer.watchResize(() => {
         this.toolbar.width = this.renderer.columns;
-        if (this.input) {
-          this.input.drawnRows = 0;
-          this.input.render();
-        }
-        this.paintToolbar();
+        this.repaint();
       });
     } else {
       await this.runLineLoop();
@@ -272,7 +272,7 @@ export class App {
     // The bar is redrawn as part of the prompt block rather than by seeking to
     // row 1: in a scrollback UI the block owns the rows above the caret, and
     // jumping to the top rewinds it from the wrong line.
-    if (this.input) this.input.render();
+    this.repaint();
   }
 
   /**
@@ -329,6 +329,46 @@ export class App {
   shortSessionId() {
     const id = String(this.renderer.meta.sessionId ?? '');
     return id === '' ? '' : id.length > 12 ? `${id.slice(0, 12)}…` : id;
+  }
+
+  /**
+   * Status-bar segments, most important first.
+   *
+   * Styled here rather than in the toolbar so a narrow terminal drops segments
+   * from the end instead of clipping the row.
+   *
+   * @returns {string[]} Pre-styled segments.
+   */
+  statusSegments() {
+    const model = this.toolbarModel();
+    const tokens = model.tokens === null ? null : `${model.tokens} tok`;
+    return [
+      `${model.status === 'busy' ? '●' : model.status === 'error' ? '✗' : '○'} ${model.status}`,
+      model.model === '' ? '' : model.model,
+      tokens ?? '',
+      model.cost ?? '',
+      model.rss ?? '',
+    ].filter((segment) => segment !== '');
+  }
+
+  /**
+   * Paint one frame: toolbar at the top, transcript scrolling in the middle,
+   * prompt and status bar pinned at the bottom.
+   *
+   * @returns {void}
+   */
+  repaint() {
+    if (this.view === null || this.view === undefined) return;
+    const width = this.renderer.columns;
+    this.view.paint({
+      editor: this.editor.snapshot(),
+      hint: this.hintRows(),
+      status: this.statusSegments(),      header: [
+        renderTabBar({ width, active: this.toolbarTab ?? 0, theme: this.theme }),
+        this.theme.style.muted('─'.repeat(Math.max(1, width))),
+      ],
+      busy: this.renderer.busy,
+    });
   }
 
   /**
@@ -395,7 +435,7 @@ export class App {
     // A tool card / new turn starts a block of output: blank the prompt first
     // so driver text is not interleaved into the middle of the input box.
     if (this.input && (event.kind === 'turn-start' || event.kind === 'tool-call') && this.input.drawnRows) {
-      this.input.erase();
+      this.input.erase(); // detached: no-op
     }
     // One assistant message fans out to one event per content block, and every
     // one of them carries the same usage record. Recording per event would
@@ -409,13 +449,10 @@ export class App {
     }
     this.renderer.handle(event);
     if (event.kind === 'turn-end') this.renderer.ensureNewline();
-    // The status line and tab bar are owned by the prompt block, which redraws
-    // them on every render. Printing them here too stacked duplicate header
-    // rows into the transcript on each turn.
-    if (wasBusy !== this.renderer.busy && this.input) {
-      this.input.drawnRows = 0;
-      this.input.render();
-    }
+    // Every event lands in the transcript sink, so the frame has to be repainted
+    // for the new rows to reach the screen. Only repainting on a busy-state
+    // change left streamed assistant text invisible until the next keystroke.
+    this.repaint();
   }
 
   // ------------------------------------------------------------------- keys
@@ -541,14 +578,14 @@ export class App {
         if (this.toolbarFocused === true) this.moveTab(1);
         else {
           this.toolbarFocused = true;
-          if (this.input) this.input.render();
+          this.repaint();
         }
         break;
       case 'toolbar-prev':
         if (this.toolbarFocused === true) this.moveTab(-1);
         else {
           this.toolbarFocused = true;
-          if (this.input) this.input.render();
+          this.repaint();
         }
         break;
       case 'toolbar-open':
@@ -568,7 +605,7 @@ export class App {
         break;
     }
     this.refreshHint();
-    if (this.input) this.input.render();
+    this.repaint();
   }
 
   /** Accept the highlighted slash-command suggestion. */
@@ -715,7 +752,7 @@ export class App {
     // With no picker open the block was already erased and the output written:
     // rendering here would repaint the prompt over that output.
     if (rows.length === 0 && !pickers?.open) return;
-    this.input.render();
+    this.repaint();
   }
 
   /** Move the suggestion highlight. */
@@ -759,14 +796,30 @@ export class App {
    * @returns {string} Hint text (may be empty).
    */
   renderHint() {
+    return this.hintRows().join('\n');
+  }
+
+  /**
+   * Hint rows under the prompt: the open picker, or the command menu.
+   *
+   * @returns {string[]} Rows, empty when nothing is open.
+   */
+  hintRows() {
     const { style } = this.theme;
-    if (this.suggestions.length === 0) return '';
-    const rows = this.suggestions.map((entry, index) => {
+    if (this.pickers?.open) {
+      const pickers = this.pickers;
+      return pickers.model
+        ? renderModelPicker(pickers.model, { width: this.renderer.columns, theme: this.theme })
+        : pickers.palette
+          ? renderPicker(pickers.palette, { width: this.renderer.columns, theme: this.theme })
+          : renderPicker(pickers.session, { width: this.renderer.columns, theme: this.theme });
+    }
+    if (this.suggestions.length === 0) return [];
+    return this.suggestions.map((entry, index) => {
       const label = `/${entry.name}`;
       const text = `${label.padEnd(9)} ${style.muted(entry.summary)}`;
       return index === this.suggestionIndex ? style.selected(text) : `  ${text}`;
     });
-    return rows.join('\n');
   }
 
   // ---------------------------------------------------------------- actions
@@ -787,11 +840,11 @@ export class App {
     // the header and prompt occupying rows, so the echoed message and the reply
     // were written underneath a live prompt and never appeared in order.
     if (this.input) {
-      this.input.erase();
+      this.input.erase(); // detached: no-op
       this.input.setHint('');
     }
     if (!value.trim()) {
-      if (this.input) this.input.render();
+      this.repaint();
       return;
     }
 
@@ -857,7 +910,7 @@ export class App {
     this.lastAbortAt = Date.now();
     if (this.input) {
       this.input.drawnRows = 0;
-      this.input.render();
+      this.repaint();
     }
     void this.requestQuit();
     return true;
@@ -885,7 +938,7 @@ export class App {
     this.renderer.systemMessage('prompt cleared — press Ctrl+C again to quit', { tone: 'warn' });
     if (this.input) {
       this.input.drawnRows = 0;
-      this.input.render();
+      this.repaint();
     }
   }
 

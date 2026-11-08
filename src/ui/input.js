@@ -93,10 +93,11 @@ export class InputController {
    * @param {() => { columns: number, promptHint?: string }} [options.hints] Layout hints.
    * @param {() => string[]} [options.header] Rows pinned above the prompt.
    */
-  constructor({ editor, stdin = process.stdin, stdout = process.stdout, onAction, hints, header }) {
+  constructor({ editor, stdin = process.stdin, stdout = process.stdout, onAction, hints, header, detached }) {
     this.editor = editor;
     this.stdin = stdin;
     this.stdout = stdout;
+    this.detached = detached === true;
     this.onAction = onAction;
     this.hints = hints ?? (() => ({ columns: 80 }));
     /**
@@ -115,9 +116,14 @@ export class InputController {
     this._onResize = this._onResize.bind(this);
   }
 
-  /** Whether the prompt can be drawn at all. */
+  /**
+   * Whether this controller should draw.
+   *
+   * A detached controller only decodes keys: the fixed-frame view owns the
+   * screen, and two painters on one terminal fight over the cursor.
+   */
   get interactive() {
-    return Boolean(this.stdout?.isTTY);
+    return this.detached !== true && Boolean(this.stdout?.isTTY);
   }
 
   /** Enter raw mode and begin listening for keys. */

@@ -24,7 +24,7 @@ import { subscribeDriver } from '../ui/app.js';
 import { SessionDriver, createSessionId } from '../session/driver.js';
 import { ResourceSampler } from '../session/resources.js';
 import { UsageMeter, formatCost, formatUsage } from '../session/usage.js';
-import { CliError, describeError, resolveContext } from './context.js';
+import { CliError, describeError, resolveContext, saveLastRoute } from './context.js';
 import { readProfileInventory } from './info.js';
 import { runMigrateCommand } from './migrate.js';
 import { runPluginsCommand } from './plugins.js';
@@ -307,9 +307,12 @@ export async function runInteractive(context, options = {}) {
           };
           app.unsubscribe = subscribeDriver(fresh, (event) => app.onEvent(event));
           app.renderer.setMeta({ model: next.model, sessionId: fresh.sessionId });
+          // Remember the working route so the next launch starts here instead
+          // of falling back to whatever the profile was installed with.
+          saveLastRoute({ provider: next.provider, model: next.model });
           // The header shows the route, and a runtime swap takes seconds: paint
           // the new model into the block so the switch is visible immediately.
-          app.input?.render?.();
+          app.repaint?.();
         },
       },
       extraCommands: [

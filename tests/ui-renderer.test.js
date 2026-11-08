@@ -242,16 +242,20 @@ test('a short system notice still renders', () => {
   assert.match(stdout.text, /compaction finished/);
 });
 
-test('chain-of-thought is counted but not printed by default', () => {
+test('chain-of-thought prints by default and can be muted', () => {
+  // Watching the agent reason is how a slow turn is told from a stuck one, so
+  // reasoning prints unless it is explicitly turned off.
   const { renderer, stdout } = makeRenderer();
   renderer.handle({ kind: 'assistant-reasoning', text: 'private thinking' });
   renderer.handle({ kind: 'assistant-text', text: 'answer' });
-  assert.doesNotMatch(stdout.text, /private thinking/);
+  assert.match(stdout.text, /private thinking/);
   assert.match(stdout.text, /answer/);
 
-  const shown = makeRenderer({ env: { DSH_CLI_REASONING: '1' } });
-  shown.renderer.handle({ kind: 'assistant-reasoning', text: 'visible thinking' });
-  assert.match(shown.stdout.text, /visible thinking/);
+  const hidden = makeRenderer({ env: { DSH_CLI_REASONING: '0' } });
+  hidden.renderer.handle({ kind: 'assistant-reasoning', text: 'hidden thinking' });
+  hidden.renderer.handle({ kind: 'assistant-text', text: 'still answered' });
+  assert.doesNotMatch(hidden.stdout.text, /hidden thinking/);
+  assert.match(hidden.stdout.text, /still answered/);
 });
 
 test('one tool call reported twice renders a single card', () => {

@@ -21,7 +21,7 @@
  * @module src/cli/context
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -158,6 +158,54 @@ export function parseRouteFromPatch(text) {
 }
 
 /**
+ * Path to the remembered-route file.
+ *
+ * @param {Record<string, string | undefined>} [env] Environment.
+ * @returns {string} Absolute path under the CLI home.
+ */
+export function lastRouteFile(env = process.env) {
+  const home = env.DSH_CLI_HOME !== undefined && env.DSH_CLI_HOME !== ''
+    ? env.DSH_CLI_HOME
+    : path.join(homedir(), '.dsh-cli');
+  return path.join(home, 'last-route.json');
+}
+
+/**
+ * Read the route the user last chose in the TUI.
+ *
+ * @param {Record<string, string | undefined>} [env] Environment.
+ * @returns {{ provider: string, model: string } | null} Remembered route, or null.
+ */
+export function readLastRoute(env = process.env) {
+  try {
+    const data = JSON.parse(readFileSync(lastRouteFile(env), 'utf8'));
+    if (typeof data?.provider !== 'string' || typeof data?.model !== 'string') return null;
+    if (data.provider === '' || data.model === '') return null;
+    return { provider: data.provider, model: data.model };
+  } catch {
+    // A missing or unreadable file just means "no memory yet".
+    return null;
+  }
+}
+
+/**
+ * Remember the route for the next session.
+ *
+ * @param {{ provider: string, model: string }} route Route that worked.
+ * @param {Record<string, string | undefined>} [env] Environment.
+ * @returns {void}
+ */
+export function saveLastRoute(route, env = process.env) {
+  try {
+    const file = lastRouteFile(env);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify({ provider: route.provider, model: route.model }, null, 2)}\n`, 'utf8');
+  } catch {
+    // A read-only home must not break a model switch.
+  }
+}
+
+/**
  * Read the default route from the patch stack a command will boot.
  *
  * Order matters and mirrors the runtime (`dsh/lib/profile-boot-*.js`): the
@@ -170,8 +218,7 @@ export function parseRouteFromPatch(text) {
  * @returns {{ provider?: string, model?: string, reasoningEffort?: string, maxTokens?: number }}
  *   Route fields, possibly empty when no patch names one.
  */
-export function readProfileRoute(dshHome, profile) {
-  for (const file of [
+export function readProfileRoute(dshHome, profile) {  for (const file of [
     path.join(dshHome, 'profiles', profile, 'cordis.patch.yml'),
     path.join(dshHome, 'cordis.patch.yml'),
   ]) {
@@ -254,8 +301,16 @@ export function resolveContext({ options = {}, env = process.env, cwd, kind = 's
   }
 
   const fromProfile = readProfileRoute(dshHome, profile);
-  const provider = options.provider ?? env.DSH_CLI_PROVIDER ?? fromProfile.provider ?? FALLBACK_ROUTE.provider;
-  const model = options.model ?? env.DSH_CLI_MODEL ?? fromProfile.model ?? FALLBACK_ROUTE.model;
+  // A model the user picked in a previous session wins over the profile
+  // default: reopening the CLI on the route you last chose is what people
+  // expect, and the profile only carries the initial value.
+  const remembered = options.provider === undefined && options.model === undefined
+    ? readLastRoute(env)
+    : null;
+  const provider =
+    options.provider ?? env.DSH_CLI_PROVIDER ?? remembered?.provider ?? fromProfile.provider ?? FALLBACK_ROUTE.provider;
+  const model =
+    options.model ?? env.DSH_CLI_MODEL ?? remembered?.model ?? fromProfile.model ?? FALLBACK_ROUTE.model;
   if (provider === '' || model === '') {
     throw new CliError('provider and model must be non-empty', {
       hint: 'Pass --provider/--model, or set DSH_CLI_PROVIDER / DSH_CLI_MODEL.',

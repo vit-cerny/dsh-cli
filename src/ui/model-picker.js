@@ -643,13 +643,17 @@ export function renderPicker(picker, { width = 80, height = MODEL_PICKER_ROWS, t
     if (row === undefined) break;
     const star = picker.favourites.has(row.id) ? '*' : ' ';
     const mark = row.active === true ? '>' : ' ';
+    const selected = start + offset === picker.index;
+    // The cursor is a character, not only inverse video: a terminal without
+    // colour (or a screenshot) otherwise gives no clue which row Enter runs.
+    const cursor = selected ? '\u276f' : ' ';
     const label = truncateToWidth(row.label, labelWidth).padEnd(labelWidth);
-    const detailWidth = Math.max(0, width - labelWidth - 6);
-    const detail = row.detail === undefined ? '' : truncateToWidth(row.detail, detailWidth);
-    // Two leading spaces keep unselected rows aligned with the selected one,
-    // whose prefix is the star and active marks.
-    const text = `  ${star}${mark} ${label} ${detail}`;
-    lines.push(start + offset === picker.index ? style.selected(text) : text);
+    const detailWidth = Math.max(0, width - labelWidth - 8);
+    // Ellipsis rather than a hard cut, so a clipped description reads as
+    // truncated instead of as text that simply stops mid-word.
+    const detail = row.detail === undefined ? '' : truncateToWidth(row.detail, detailWidth, '\u2026');
+    const text = `${cursor} ${star}${mark} ${label} ${detail}`;
+    lines.push(selected ? style.selected(text) : text);
   }
 
   const above = start;
