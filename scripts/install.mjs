@@ -313,7 +313,7 @@ export async function runInstall(options = {}) {
   for (const launcher of launchers) stdout.write(`${dryRun ? 'would write' : 'wrote'} ${launcher}\n`);
 
   if (!onPath) {
-    notes.push(`add ${binDir} to PATH (dsh-cli doctor prints the exact command)`);
+    notes.push(`add ${binDir} to PATH, or re-run with --dir pointing at a directory that already is`);
   }
 
   let profile = 'skipped';
