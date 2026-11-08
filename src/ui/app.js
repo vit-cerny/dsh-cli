@@ -200,10 +200,15 @@ export class App {
    * @returns {Promise<{ exitCode: number }>} Resolves when the app quits.
    */
   async run() {
-    // Header, opencode style: one tab bar, then one status line, both drawn by
-    // the prompt block so they stay pinned to the bottom while the transcript
-    // scrolls above them. The old three-line banner pushed the conversation
-    // down and buried the tabs.
+    // Startup banner, then the pinned block. The banner scrolls away with the
+    // conversation; the tab bar and status line stay at the bottom because the
+    // prompt block owns them.
+    this.renderer.banner({
+      version: this.version,
+      model: this.renderer.meta.model,
+      cwd: this.renderer.meta.cwd,
+      sessionId: this.renderer.meta.sessionId,
+    });
     if (!this.interactive) this.paintToolbar();
     this.resources?.start?.();
 

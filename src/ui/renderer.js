@@ -265,12 +265,15 @@ export class Renderer {
     const { style, glyph } = this.theme;
     if (info.version) this.setMeta({ model: info.model, cwd: info.cwd, sessionId: info.sessionId });
     this.ensureNewline();
-    this.write(`${style.bold('dsh')} ${style.muted(`v${info.version ?? '0.0.0'}`)} ${style.muted('· terminal client')}\n`);
-    const hints = [
-      `${style.muted(glyph.bullet)} Enter send  ${style.muted('·')}  Ctrl+J newline  ${style.muted('·')}  ↑↓ history`,
-      `${style.muted(glyph.bullet)} /help commands  ${style.muted('·')}  Ctrl+O fold  ${style.muted('·')}  Ctrl+C abort  ${style.muted('·')}  Ctrl+D quit`,
-    ];
-    for (const hint of hints) this.write(`${truncateToWidth(hint, this.columns)}\n`);
+    // Two compact lines, the Claude Code / opencode shape: what this is and
+    // which model on the first, where it runs on the second. The key hints live
+    // behind /help so the conversation starts immediately instead of under a
+    // wall of chrome.
+    const model = info.model === undefined || info.model === '' ? '' : `${style.muted(glyph.bullet)} ${style.info(String(info.model))}`;
+    this.write(`${style.bold('dsh-cli')} ${style.muted(`v${info.version ?? '0.0.0'}`)}${model === '' ? '' : ` ${model}`}\n`);
+    if (info.cwd !== undefined && info.cwd !== '') {
+      this.write(`${style.muted(truncateToWidth(String(info.cwd), this.columns))}\n`);
+    }
     this.write('\n');
   }
 

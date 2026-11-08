@@ -229,6 +229,10 @@ export class InputController {
     // The writes above leave the caret on the line *below* the block, so the
     // distance back to the caret row equals the block height minus the row.
     this.drawnRows = rows.length + hintRows.length;
+    // Rows between the block top and the caret. `erase` rewinds exactly this
+    // far, then clears downward: rewinding the full block height instead landed
+    // one row above the block and ate the banner's last line.
+    this.caretOffset = caretRow;
     const back = this.drawnRows - caretRow;
     if (back > 0) out += cursor.up(back);
     out += cursor.column(plan.caretCol + 1);
@@ -238,7 +242,13 @@ export class InputController {
   /** Wipe the prompt block (called before transcript output is printed). */
   erase() {
     if (!this.interactive || this.drawnRows === 0) return;
-    this.stdout.write(`${cursor.up(this.drawnRows)}${ERASE_DOWN}`);
+    // `up(0)` clamps to one row in some terminals, so skip the move when the
+    // caret already sits on the block's first row. The caret also keeps its
+    // column across the move, and ERASE_DOWN only clears from that column
+    // rightward, so return to column 1 first or the row's left edge survives.
+    const rewind = Number.isInteger(this.caretOffset) ? this.caretOffset : 0;
+    this.stdout.write(`${rewind > 0 ? cursor.up(rewind) : ''}${cursor.column(1)}${ERASE_DOWN}`);
     this.drawnRows = 0;
+    this.caretOffset = 0;
   }
 }
