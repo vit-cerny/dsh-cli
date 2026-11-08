@@ -61,23 +61,22 @@ test('full width renders every segment in contract order', () => {
   assert.ok(displayWidth(row) <= 80);
 });
 
-test('narrow width drops trailing segments and keeps the session label', () => {
+test('narrow width drops the least important segments and keeps the state marker', () => {
   const toolbar = makeToolbar({ width: 34 });
   const row = toolbar.render(fullModel());
 
+  // The state marker is the reason the bar exists, so it goes last, not first.
+  assert.ok(row.includes('busy'), `the state marker survives: ${row}`);
   assert.ok(row.startsWith('[3 ❯ dsh-cli]'), `session label survives: ${row}`);
-  assert.ok(row.includes('openai/gpt-6'), 'the model is the last segment kept here');
-  assert.equal(row.includes('tok'), false, 'tokens dropped');
-  assert.equal(row.includes('$0.0042'), false, 'cost dropped');
-  assert.equal(row.includes('250 MiB'), false, 'rss dropped');
-  assert.equal(row.includes('busy'), false, 'status dropped');
+  assert.equal(row.includes('250 MiB'), false, 'rss is the first thing dropped');
+  assert.equal(row.includes('$0.0042'), false, 'cost dropped before tokens');
   assert.equal(row.endsWith(' · '), false, 'no separator outlives its segment');
   assert.ok(displayWidth(row) <= 34);
 });
 
 test('very narrow width clips the session label instead of erasing it', () => {
   const toolbar = makeToolbar({ width: 8 });
-  const row = toolbar.render(fullModel());
+  const row = toolbar.render(fullModel({ status: '' }));
 
   assert.ok(row.startsWith('[3 ❯ '), `label still identifiable: ${row}`);
   assert.ok(row.endsWith(']'), 'the closing bracket is rebuilt, not orphaned');

@@ -425,24 +425,34 @@ export class Toolbar {
     const { theme } = this;
     const budget = clampWidth(this.width);
 
-    const segments = [
-      sessionSegment(source, theme),
-      modelSegment(source, theme),
-      tokensSegment(source, theme),
-      textSegment(source.cost, theme.style.muted),
-      textSegment(source.rss, theme.style.muted),
-      statusSegment(source, theme),
-    ].filter((segment) => segment !== null);
-    if (segments.length === 0) return '';
+    // Display order is left-to-right; `drop` is the order they are sacrificed
+    // in. The state marker goes last (never first): a 40-column terminal still
+    // has to say whether the agent is working, and that is the whole point of
+    // the bar.
+    const parts = [
+      [sessionSegment(source, theme), 1],
+      [modelSegment(source, theme), 2],
+      [tokensSegment(source, theme), 3],
+      [textSegment(source.cost, theme.style.muted), 4],
+      [textSegment(source.rss, theme.style.muted), 5],
+      [statusSegment(source, theme), 0],
+    ].filter(([segment]) => segment !== null);
+    if (parts.length === 0) return '';
 
-    let kept = segments;
-    while (kept.length > 1 && displayWidth(joinPlain(kept)) > budget) {
-      kept = kept.slice(0, -1);
+    let kept = parts;
+    while (kept.length > 1 && displayWidth(joinPlain(kept.map(([segment]) => segment))) > budget) {
+      // Sacrifice the least important survivor, not simply the right-most one.
+      let victim = 0;
+      for (let index = 1; index < kept.length; index += 1) {
+        if (kept[index][1] > kept[victim][1]) victim = index;
+      }
+      kept = kept.filter((_, index) => index !== victim);
     }
+    const segments = kept.map(([segment]) => segment);
 
     let line;
-    if (kept.length === 1) {
-      const only = kept[0];
+    if (segments.length === 1) {
+      const only = segments[0];
       const fitted =
         displayWidth(only.plain) <= budget
           ? only.plain
@@ -451,7 +461,7 @@ export class Toolbar {
             : truncateToWidth(only.plain, budget, theme.glyph.ellipsis);
       line = only.paint(fitted);
     } else {
-      line = kept.map((segment) => segment.paint(segment.plain)).join(theme.style.muted(SEPARATOR));
+      line = segments.map((segment) => segment.paint(segment.plain)).join(theme.style.muted(SEPARATOR));
     }
 
     return this.interactive ? padToWidth(line, budget) : line;

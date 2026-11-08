@@ -216,7 +216,11 @@ export class InputController {
 
     let out = '';
     if (this.drawnRows > 0) {
-      out += `${cursor.up(this.drawnRows)}${ERASE_DOWN}`;
+      // Return to column 1 first. The caret sits at the prompt column, and
+      // ERASE_DOWN clears only from the current column rightward, so erasing
+      // from there left the first characters of the top row behind ("ds" from
+      // the banner) once the block grew a hint list.
+      out += `${cursor.up(this.drawnRows)}${cursor.column(1)}${ERASE_DOWN}`;
     }
     for (const row of rows) out += `${row}\n`;
     const hintRows = this.hint
