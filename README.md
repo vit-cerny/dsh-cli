@@ -194,7 +194,7 @@ The command it launches is:
 node.exe  <DSH>/lib/bin.js  --profile dsh-cli-acp
 ```
 
-The ACP bundle owns session defaults separately from `agent-default-model`, so the profile pins its route too (`- id: acp`). Without that, ACP sessions would start on the stock DeepSeek adapter even when the catalog points elsewhere.
+The ACP bundle owns session defaults separately from `agent-default-model`, so a pinned route is pinned for ACP too (`- id: acp`). Without that pin, an ACP session starts on the stock DeepSeek adapter even when the catalog points elsewhere. Pin one with `node scripts/install-profile.mjs --provider <id> --model <id>`.
 
 Worth knowing:
 
